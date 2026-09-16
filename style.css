@@ -25,7 +25,6 @@ body{
   cursor:default;
 }
 
-/* Full-viewport 3D + atmosphere layers */
 #scene{
   position:fixed; inset:0;
   width:100%; height:100%;
@@ -59,7 +58,6 @@ body{
   pointer-events:none;
 }
 
-/* Fixed 1920x1080 design surface */
 #stage{
   position:fixed;
   top:0; left:0;
@@ -78,6 +76,31 @@ body.theme-light{ --fg: var(--ink); --bg: var(--cream); --panel-rgb: 255,251,242
   position:absolute; inset:0;
   color:var(--fg);
   transition:color 1.4s cubic-bezier(.4,0,.2,1);
+}
+
+/* Institutional Persistent Logos & Positions */
+.logo-bottom-left {
+  position: absolute;
+  bottom: 56px;
+  left: 64px;
+  z-index: 20;
+  pointer-events: auto;
+}
+
+.handle-bottom-right {
+  position: absolute;
+  bottom: 56px;
+  right: 64px;
+  z-index: 20;
+  pointer-events: auto;
+}
+
+.logo-pdf {
+  height: 48px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.15));
 }
 
 .top-controls {
@@ -114,7 +137,7 @@ body.theme-light{ --fg: var(--ink); --bg: var(--cream); --panel-rgb: 255,251,242
 .handle{
   font-size:15px; letter-spacing:0.02em;
   font-weight:500;
-  opacity:0.55;
+  opacity:0.65;
 }
 
 .text-layer{
@@ -147,7 +170,7 @@ body.theme-light{ --fg: var(--ink); --bg: var(--cream); --panel-rgb: 255,251,242
   max-width:1300px;
 }
 .text-layer[data-align="bottom"]{
-  top:auto; bottom:86px; left:64px; transform:translate(0,0);
+  top:auto; bottom:120px; left:64px; transform:translate(0,0);
   text-align:left;
 }
 
@@ -176,56 +199,45 @@ body.theme-light{ --fg: var(--ink); --bg: var(--cream); --panel-rgb: 255,251,242
   font-weight:inherit;
 }
 
-/* Persistent Logo Placements */
-.pdf-logo {
-  position: absolute;
-  width: 160px; /* Adjust as needed for your PDFs */
-  height: 60px; 
-  z-index: 20;
-  pointer-events: none;
+/* 3D Perspective Photo Frame */
+.photo-frame{
+  position:absolute;
+  bottom:110px; right:96px;
+  width:440px;
+  perspective:1200px;
+  opacity:0; transform:translateY(24px) scale(0.95);
+  transition:opacity 1s cubic-bezier(.4,0,.2,1), transform 1s cubic-bezier(.4,0,.2,1);
+  pointer-events:auto;
+  z-index:12;
 }
-.pdf-logo.bottom-left {
-  bottom: 64px;
-  left: 64px;
-}
-.pdf-logo.top-right {
-  top: 56px;
-  right: 220px; /* Offset to not collide with the language button */
-}
-.handle-bottom-right {
-  position: absolute;
-  bottom: 64px;
-  right: 64px;
-  z-index: 20;
-}
-
-/* 3D Image Integration */
-.photo-frame {
-  /* ... keep your existing properties ... */
-  transform-style: preserve-3d;
-  perspective: 1200px;
-}
-
-.photo-frame.visible {
-  opacity: 0.85; /* Slight transparency fade */
-  /* This gives the HTML element a 3D tilt, making it look like a floating glass panel */
-  transform: perspective(1200px) rotateY(-12deg) rotateX(4deg) translateY(0) scale(1);
-}
+.photo-frame.visible{ opacity:1; transform:translateY(0) scale(1); }
 
 .photo-frame__img{
   width:100%;
   aspect-ratio: 4 / 5;
-  border-radius:6px;
+  border-radius:12px;
   background-size:cover;
   background-position:center;
-  box-shadow: 0 30px 70px rgba(15,11,1,0.28);
   position:relative;
   overflow:hidden;
+  opacity:0.88;
+  transform: rotateY(-14deg) rotateX(7deg) rotateZ(-1.5deg) translateZ(0);
+  transform-style: preserve-3d;
+  box-shadow: -20px 25px 50px rgba(0,0,0,0.4), 0 0 20px rgba(255,255,255,0.05);
+  transition: transform 0.8s ease, opacity 0.8s ease, box-shadow 0.8s ease;
+  backdrop-filter: blur(2px);
 }
+
+.photo-frame__img:hover{
+  transform: rotateY(-6deg) rotateX(3deg) scale(1.02);
+  opacity:0.96;
+}
+
 .photo-frame__img::after{
   content:"";
   position:absolute; inset:0;
-  background:linear-gradient(180deg, rgba(255,251,242,0) 55%, rgba(15,11,1,0.22) 100%);
+  background:linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(15,11,1,0.3) 100%);
+  pointer-events:none;
 }
 .photo-frame figcaption{
   margin-top:14px;
@@ -237,7 +249,7 @@ body.theme-light{ --fg: var(--ink); --bg: var(--cream); --panel-rgb: 255,251,242
 
 .qr-row{
   position:absolute;
-  bottom:86px; left:64px;
+  bottom:120px; left:64px;
   display:flex; gap:28px;
   opacity:0; transform:translateY(16px);
   transition:opacity 1s ease, transform 1s ease;
