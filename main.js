@@ -112,7 +112,7 @@ const _tmpColor = new THREE.Color();
 const _tmpVecA = new THREE.Vector3();
 
 /* -------------------------------------------------------------------------
-   Glow sprites (soft radial gradient, additive) — for "energy" moments
+   Glow sprites
    ------------------------------------------------------------------------- */
 const _glowTexCache = {};
 function glowTexture(colorHex){
@@ -140,8 +140,7 @@ function makeGlow(colorHex, scale){
 }
 
 /* -------------------------------------------------------------------------
-   TrailSystem — GPU point trail with per-point fading alpha (shader-based)
-   Represents: movement, influence, accumulated experience, paths left behind.
+   TrailSystem & ConnectionNet & Starfield
    ------------------------------------------------------------------------- */
 class TrailSystem {
   constructor(count, baseColorHex, pointSize){
@@ -211,10 +210,6 @@ class TrailSystem {
   dispose(){ this.geometry.dispose(); this.material.dispose(); }
 }
 
-/* -------------------------------------------------------------------------
-   ConnectionNet — selective proximity-based connective lines
-   Represents: trust formed, relationships emerging, shared trajectory.
-   ------------------------------------------------------------------------- */
 class ConnectionNet {
   constructor(maxConnections, colorHex, opts){
     opts = opts || {};
@@ -222,7 +217,6 @@ class ConnectionNet {
     const positions = new Float32Array(maxConnections * 2 * 3);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
-    // additive blending washes out to invisible on light/cream backgrounds — allow opting out
     const m = new THREE.LineBasicMaterial({
       color: colorHex, transparent: true,
       opacity: opts.opacity !== undefined ? opts.opacity : 0.32,
@@ -254,9 +248,6 @@ class ConnectionNet {
   dispose(){ this.geometry.dispose(); this.material.dispose(); }
 }
 
-/* -------------------------------------------------------------------------
-   Starfield — faint twinkling points for tunnel / deep-space environments
-   ------------------------------------------------------------------------- */
 class Starfield {
   constructor(count){
     const positions = new Float32Array(count * 3);
@@ -301,9 +292,6 @@ class Starfield {
   dispose(){ this.geometry.dispose(); this.material.dispose(); }
 }
 
-/* -------------------------------------------------------------------------
-   Per-chapter disposal tracking
-   ------------------------------------------------------------------------- */
 let disposables = [];
 let clonedMaterials = [];
 
@@ -315,9 +303,6 @@ function clearWorld(){
   clonedMaterials = [];
 }
 
-/* -------------------------------------------------------------------------
-   Flash + transient connection line helpers
-   ------------------------------------------------------------------------- */
 const flashEl = document.getElementById('flash');
 function triggerFlash(){
   gsap.killTweensOf(flashEl);
@@ -346,7 +331,7 @@ function flashConnection(a, b, colorHex, opts){
 }
 
 /* -------------------------------------------------------------------------
-   Camera rig — smooth, framerate-independent follow
+   Camera rig
    ------------------------------------------------------------------------- */
 const camCur  = { pos: new THREE.Vector3(0, 0, 20), look: new THREE.Vector3(0, 0, 0) };
 const camGoal = { pos: new THREE.Vector3(0, 0, 20), look: new THREE.Vector3(0, 0, 0) };
@@ -361,23 +346,19 @@ function updateCamera(dt, tAbs){
   camCur.pos.lerp(camGoal.pos, k);
   camCur.look.lerp(camGoal.look, k);
   
-  // 1) Soft idle movement added across X, Y, and Z axes
   const idleX = Math.sin(tAbs * 0.25) * 0.45;
   const idleY = Math.cos(tAbs * 0.18) * 0.35;
   const idleZ = Math.sin(tAbs * 0.12) * 0.25;
   
   camera.position.set(camCur.pos.x + idleX, camCur.pos.y + idleY, camCur.pos.z + idleZ);
   
-  // Subtle drift to the camera's focus point for a more organic feel
   const lookIdleX = Math.cos(tAbs * 0.15) * 0.15;
   const lookIdleY = Math.sin(tAbs * 0.1) * 0.15;
   camera.lookAt(camCur.look.x + lookIdleX, camCur.look.y + lookIdleY, camCur.look.z);
 }
 
 /* =========================================================================
-   CHAPTER 1 — Título: sphere rolls in → becomes a cube (brief static pop) →
-   is left behind, drifting off-screen, as the next sphere rolls in. Camera
-   follows whichever sphere is currently rolling. Seamless loop.
+   CHAPTER 1 — Fixed second sphere spawning bug cleanly
    ========================================================================= */
 function makeChapter1(){
   let runners = [], ambient = [];
@@ -422,7 +403,13 @@ function makeChapter1(){
     runners.forEach(r => {
       const local = ((t + r.phase) % CYCLE) / CYCLE;
       if(local < ROLL_END){
-        if(r.isCube){ r.isCube = false; swapGeometry(r.mesh, 'sphere'); r.mesh.scale.setScalar(1); r.mesh.material.opacity = 1; }
+        // Fix: Force state reset on rolling phase entry
+        if(r.isCube || r.mesh.material.opacity < 1){
+          r.isCube = false;
+          swapGeometry(r.mesh, 'sphere');
+          r.mesh.scale.setScalar(1);
+          r.mesh.material.opacity = 1;
+        }
         const p = local / ROLL_END;
         const x = THREE.MathUtils.lerp(START_X, TRIGGER_X, easeOutCubic(p));
         r.mesh.position.x = x;
@@ -438,7 +425,6 @@ function makeChapter1(){
         }
         r.mesh.position.set(TRIGGER_X, 0, 0);
       } else if(local < EXIT_END){
-        // the old cube leaves through the RIGHT side, opposite the new sphere's entry
         const p2 = (local - POP_END) / (EXIT_END - POP_END);
         r.mesh.position.x = THREE.MathUtils.lerp(TRIGGER_X, EXIT_X_CUBE, easeOutCubic(p2));
         r.mesh.rotation.y += dt * 2.2;
@@ -456,8 +442,7 @@ function makeChapter1(){
 }
 
 /* =========================================================================
-   CHAPTER 2 — Línea de graduación: spheres pulled behind a STATIC half-circle,
-   emerging on the other side in a new color. Arch never rotates.
+   CHAPTER 2
    ========================================================================= */
 function makeChapter2(){
   let arc, spheres = [];
@@ -470,7 +455,7 @@ function makeChapter2(){
 
     arc = new THREE.Mesh(new THREE.TorusGeometry(6.2, 0.4, 20, 64, Math.PI), mat(PALETTE.ink));
     arc.position.set(0, -3.2, -3.5);
-    world.add(arc); // static — no rotation, no animation, ever
+    world.add(arc);
 
     spheres = [];
     for(let i = 0; i < N; i++){
@@ -508,12 +493,7 @@ function makeChapter2(){
 }
 
 /* =========================================================================
-   CHAPTER 3 — Transición: the environment holds on the STATIC arc (same as
-   ch2, spheres/photo already gone) for a beat, background still light, then
-   the arc glides forward and the camera dollies through it while the
-   background shifts hue-by-hue into a cycling dark palette. Mixed-shape
-   particles pop in from outside the frame and fly inward with the camera,
-   then settle into an orbiting, connection-forming "galaxy" mingle.
+   CHAPTER 3
    ========================================================================= */
 function makeChapter3(){
   let floaters = [], net, stars;
@@ -588,7 +568,6 @@ function makeChapter3(){
         f.mesh.position.z = -16 + Math.sin(a * 0.7) * f.orbitR * 0.7;
         f.mesh.rotation.x += dt * 0.5;
         f.mesh.rotation.y += dt * 0.4;
-        // stay on-palette: keep the spawned hue, just breathe its lightness
         const hsl = { h: 0, s: 0, l: 0 };
         f.base.getHSL(hsl);
         const col = new THREE.Color().setHSL(hsl.h, hsl.s, THREE.MathUtils.clamp(hsl.l + Math.sin(t * 1.3 + f.driftPhase) * 0.08, 0.15, 0.85));
@@ -604,9 +583,7 @@ function makeChapter3(){
 }
 
 /* =========================================================================
-   CHAPTER 4 — Academia + Industria + Ciudad: three hero shapes spiral upward
-   (DNA dance), each leaving a colored shader trail; smaller sphere/cube
-   particles are attracted toward those trails. Camera always follows heroes.
+   CHAPTER 4 — Added Force Field & Orbiting Particles around 3 main heroes
    ========================================================================= */
 function makeChapter4(){
   let heroes = [], minions = [];
@@ -630,14 +607,14 @@ function makeChapter4(){
     });
 
     minions = [];
-    for(let i = 0; i < 24; i++){
+    for(let i = 0; i < 28; i++){
       const shape = Math.random() < 0.5 ? 'sphere' : 'cube';
       const color = Math.random() < 0.5 ? PALETTE.orange : PALETTE.cyan;
       const mesh = makeMesh(shape, color);
       mesh.scale.setScalar(0.28 + Math.random() * 0.22);
       mesh.position.set(rand(-8, 8), rand(-20, -2), rand(-4, 4));
       world.add(mesh);
-      minions.push({ mesh, speed: rand(0.7, 1.5) });
+      minions.push({ mesh, speed: rand(0.8, 1.4) });
     }
   }
   function exit(){ heroes = []; minions = []; }
@@ -658,15 +635,39 @@ function makeChapter4(){
     });
     cx /= heroes.length; cy /= heroes.length; cz /= heroes.length;
 
+    // Orbiting + Attraction + Repulsion Forcefield
+    const REPEL_DIST = 3.2;
     minions.forEach(m => {
-      let nearest = heroes[0], best = Infinity;
-      heroes.forEach(h => { const d = m.mesh.position.distanceToSquared(h.mesh.position); if(d < best){ best = d; nearest = h; } });
-      _tmpVecA.copy(nearest.mesh.position).sub(m.mesh.position);
-      _tmpVecA.y -= 2.4;
-      if(_tmpVecA.lengthSq() > 0.0001) _tmpVecA.normalize();
-      m.mesh.position.addScaledVector(_tmpVecA, dt * m.speed * 1.35);
-      m.mesh.rotation.y += dt; m.mesh.rotation.x += dt * 0.5;
-      if(m.mesh.position.y > cy + 14) m.mesh.position.set(rand(-8, 8), cy - 16, rand(-4, 4));
+      const repel = new THREE.Vector3();
+      heroes.forEach(h => {
+        const dist = m.mesh.position.distanceTo(h.mesh.position);
+        if(dist < REPEL_DIST && dist > 0.001){
+          const pushDir = new THREE.Vector3().subVectors(m.mesh.position, h.mesh.position).normalize();
+          repel.addScaledVector(pushDir, (REPEL_DIST - dist) * 4.2);
+        }
+      });
+
+      const pullCenter = new THREE.Vector3(cx, cy, cz).sub(m.mesh.position);
+      pullCenter.y = (cy - m.mesh.position.y) * 0.4;
+
+      const relX = m.mesh.position.x - cx;
+      const relZ = m.mesh.position.z - cz;
+      const orbit = new THREE.Vector3(-relZ, 0, relX).normalize().multiplyScalar(3.5);
+
+      const vel = new THREE.Vector3()
+        .addScaledVector(pullCenter.normalize(), 1.5)
+        .add(orbit)
+        .add(repel);
+
+      m.mesh.position.addScaledVector(vel, dt * m.speed);
+      m.mesh.rotation.y += dt * 1.5;
+      m.mesh.rotation.x += dt * 0.8;
+
+      if(m.mesh.position.y > cy + 14 || m.mesh.position.y < cy - 16){
+        const ang = rand(0, TWO_PI);
+        const r = rand(4, 7);
+        m.mesh.position.set(cx + Math.cos(ang) * r, cy - 14, cz + Math.sin(ang) * r);
+      }
     });
 
     setCamGoal(cx + 7.5, cy + 2, cz + 11, cx, cy, cz);
@@ -675,9 +676,7 @@ function makeChapter4(){
 }
 
 /* =========================================================================
-   CHAPTER 5 — Red / mandala: the heroes are gone, sphere+cube particles keep
-   reorganizing into an ever-spawning, ever-moving mandala network. Camera
-   breathes continuously toward and away from the center.
+   CHAPTER 5
    ========================================================================= */
 function makeChapter5(){
   let parts = [], net;
@@ -701,7 +700,6 @@ function makeChapter5(){
   function exit(){ parts = []; }
 
   function update(dt, t){
-    // stay on-palette: pulse between ink and forest rather than a free rainbow hue
     bgGoal.copy(new THREE.Color(PALETTE.ink).lerp(new THREE.Color(PALETTE.forest), 0.35 + Math.sin(t * 0.18) * 0.25));
     parts.forEach(p => {
       const ang = p.angle + t * 0.13;
@@ -720,9 +718,7 @@ function makeChapter5(){
 }
 
 /* =========================================================================
-   CHAPTER 6 — Comunidad: a flash transition drops into a dark environment of
-   many shapes streaking horizontally at different speeds, each leaving a
-   colorful trail — the accumulated pattern of collective movement.
+   CHAPTER 6
    ========================================================================= */
 function makeChapter6(){
   let streaks = [], stars;
@@ -749,7 +745,6 @@ function makeChapter6(){
   function exit(){ streaks = []; }
 
   function update(dt, t){
-    // stay on-palette: pulse between ink and a touch of pink instead of a free rainbow hue
     bgGoal.copy(new THREE.Color(PALETTE.ink).lerp(new THREE.Color(PALETTE.pink), 0.1 + Math.sin(t * 0.25) * 0.06));
     stars.update(t);
     streaks.forEach(s => {
@@ -765,14 +760,11 @@ function makeChapter6(){
 }
 
 /* =========================================================================
-   CHAPTER 7 — Confianza: one sphere floats forward, camera follows it. Each
-   shape it passes forms a brief connection and adds speed; trail intensity
-   scales with speed; it eases back down for a seamless loop.
+   CHAPTER 7 — Extended travel distance for a longer, less jarring loop
    ========================================================================= */
 function makeChapter7(){
   let runner, trail, obstacles = [], net, x = 0, connectionsMade = 0;
-  // 2) Extended RANGE for a longer loop and increased THRESH so lines stay connected longer
-  const BASE_SPEED = 2.0, SPEED_PER_CONNECTION = 1.35, RANGE = 70, THRESH = 6.5; 
+  const BASE_SPEED = 2.0, SPEED_PER_CONNECTION = 0.8, RANGE = 140, THRESH = 6.5;
 
   function enter(){
     camSmooth = 0.035;
@@ -783,18 +775,16 @@ function makeChapter7(){
     world.add(trail.points); disposables.push(trail);
 
     obstacles = [];
-    // Spawn more obstacles over the extended range
-    for(let i = 0; i < 18; i++){
+    for(let i = 0; i < 36; i++){
       const shape = pick(['cube', 'octa', 'tetra', 'cylinder']);
       const color = pick([PALETTE.cyan, PALETTE.orange, PALETTE.pink]);
       const mesh = makeMesh(shape, color);
       mesh.scale.setScalar(0.52);
-      const ox = -RANGE / 2 + (i + 0.6) * (RANGE / 18);
+      const ox = -RANGE / 2 + (i + 0.6) * (RANGE / 36);
       mesh.position.set(ox, rand(-1.5, 1.5), rand(-2, 2));
       world.add(mesh);
       obstacles.push({ mesh, hit: false });
     }
-    // 2) Increased opacity to make the connection lines bolder and more visible
     net = new ConnectionNet(30, PALETTE.ink, { blending: THREE.NormalBlending, opacity: 0.95 });
     world.add(net.mesh); disposables.push(net);
   }
@@ -827,68 +817,76 @@ function makeChapter7(){
 }
 
 /* =========================================================================
-   CHAPTER 8 — Experiencia y nuevas rutas: sphere becomes a glowing cube; four
-   spheres branch from it and keep climbing organically, trailing light.
-   Camera follows the rising branches.
+   CHAPTER 8 — Only Cube comes in first; delayed spawn with dynamic paths
    ========================================================================= */
 function makeChapter8(){
-  let core, glow = null, branches = [], morphed = false;
+  let core, glow = null, branches = [], released = false;
   const RISE_SPAN = 40;
 
   function enter(){
     camSmooth = 0.006; 
-    core = makeMesh('sphere', PALETTE.orange);
+    core = makeMesh('cube', PALETTE.orange);
     world.add(core);
-    morphed = false; glow = null;
+    released = false; glow = null;
+
+    gsap.fromTo(core.position, { x: -14, y: 0, z: 0 }, { x: 0, y: 0, z: 0, duration: 1.0, ease: 'power2.out' });
+    gsap.fromTo(core.scale, { x: 1.4, y: 0.6, z: 1.4 }, { x: 1, y: 1, z: 1, duration: 1.0, ease: 'elastic.out(1,0.6)' });
 
     branches = [];
     const colors = [PALETTE.cyan, PALETTE.pink, PALETTE.red, PALETTE.orange];
     for(let i = 0; i < 4; i++){
       const color = colors[i];
       const mesh = makeMesh('sphere', color);
-      // 3) Start branches at scale 0 for natural spawn animation
       mesh.scale.setScalar(0); 
       world.add(mesh);
-      // Staggered pop-in animation
-      gsap.to(mesh.scale, {x: 0.5, y: 0.5, z: 0.5, duration: 1.5, delay: i * 0.2 + 0.5, ease: 'back.out(1.5)'});
       
       const trail = new TrailSystem(140, color, 85);
       world.add(trail.points); disposables.push(trail);
-      branches.push({ mesh, trail, dirAngle: (i / 4) * TWO_PI + 0.4, radius: 1.4 + i * 0.3, wobble: rand(0, TWO_PI) });
+      branches.push({
+        mesh, trail,
+        dirAngle: (i / 4) * TWO_PI,
+        radius: 2.2 + i * 0.4,
+        freqX: rand(1.2, 2.2),
+        freqZ: rand(1.5, 2.5),
+        phase: rand(0, TWO_PI)
+      });
     }
     setCamGoal(0, 1, 13.5, 0, 1, 0);
   }
   function exit(){ branches = []; }
 
   function update(dt, t){
-    if(t > 0.55 && !morphed){
-      morphed = true;
-      swapGeometry(core, 'cube');
-      // 3) Make the cube fly in from the left side (-12 on the X axis)
-      gsap.fromTo(core.position, { x: -12, y: 0, z: 0 }, { x: 0, y: 0, z: 0, duration: 1.2, ease: 'power2.out' });
-      gsap.fromTo(core.scale, { x: 1.4, y: 0.6, z: 1.4 }, { x: 1, y: 1, z: 1, duration: 1.2, ease: 'elastic.out(1,0.6)' });
+    core.rotation.y += dt * 0.4;
+    
+    if(t > 1.1 && !released){
+      released = true;
       glow = makeGlow(PALETTE.orange, 5);
+      glow.position.copy(core.position);
       world.add(glow);
+
+      branches.forEach((b, i) => {
+        gsap.to(b.mesh.scale, { x: 0.55, y: 0.55, z: 0.55, duration: 1.2, delay: i * 0.15, ease: 'back.out(2)' });
+      });
     }
-    core.rotation.y += dt * 0.3;
+
     if(glow){
       glow.position.copy(core.position);
-      const pulse = 4.6 + Math.sin(t * 2) * 0.5;
+      const pulse = 4.6 + Math.sin(t * 2.5) * 0.5;
       glow.scale.set(pulse, pulse, 1);
     }
 
-    if(morphed){
+    if(released){
       let cx = 0, cy = 0, cz = 0;
-      const age = t - 0.55;
+      const age = t - 1.1;
       branches.forEach(b => {
-        const y = (age * 1.9) % RISE_SPAN;
-        const wob = Math.sin(t * 1.4 + b.wobble) * 0.6;
-        b.mesh.position.x = Math.cos(b.dirAngle) * (b.radius + wob * 0.4) + Math.sin(t * 0.7 + b.wobble) * 0.6;
-        b.mesh.position.z = Math.sin(b.dirAngle) * (b.radius + wob * 0.4);
+        const y = (age * 2.2) % RISE_SPAN;
+        const r = b.radius + Math.sin(age * b.freqX + b.phase) * 0.8;
+        b.mesh.position.x = Math.cos(b.dirAngle + age * 0.8) * r + Math.sin(age * 2.5) * 0.7;
+        b.mesh.position.z = Math.sin(b.dirAngle * 2 + age * 0.9) * r + Math.cos(age * 2.1) * 0.7;
         b.mesh.position.y = y;
-        b.mesh.rotation.x += dt * 2; b.mesh.rotation.y += dt * 1.5;
+        b.mesh.rotation.x += dt * 2.5; b.mesh.rotation.y += dt * 1.8;
         b.trail.spawn(b.mesh.position);
-        b.trail.decay(dt * 0.7);
+        b.trail.decay(dt * 0.65);
         cx += b.mesh.position.x; cy += y; cz += b.mesh.position.z;
       });
       cx /= branches.length; cy /= branches.length; cz /= branches.length;
@@ -900,8 +898,7 @@ function makeChapter8(){
 }
 
 /* =========================================================================
-   CHAPTER 9 — Torre infinita: spheres and cubes keep falling and stacking;
-   the tower never stops building; camera continuously follows its top.
+   CHAPTER 9
    ========================================================================= */
 function makeChapter9(){
   let pieces = [], spawnAcc = 0, topY = 0, count = 0;
@@ -939,13 +936,12 @@ function makeChapter9(){
 }
 
 /* =========================================================================
-   CHAPTER 10 — Escalera: cube steps keep rearranging upward; spheres roll
-   over them, each pass gently dragging that step higher — nobody is left
-   behind. Camera keeps rising, following the staircase being built.
+   CHAPTER 10 — Shifted right + added smooth spawn animation for spheres
    ========================================================================= */
 function makeChapter10(){
   let steps = [], rollers = [], spawnAcc = 0, stepIndex = 0;
   const CAP = 40, STEP_DX = 2.0, STEP_DY = 1.05, SPAWN_RATE = 0.45;
+  const X_OFFSET = 4.0; // Shift right to avoid overlap with text box
 
   function enter(){
     camSmooth = 0.03;
@@ -957,17 +953,19 @@ function makeChapter10(){
       mesh.material.opacity = 0;
       mesh.scale.setScalar(0.001);
       world.add(mesh);
-      gsap.to(mesh.scale, { x: 1, y: 1, z: 1, duration: 0.6, delay: 0.3 + s * 0.4, ease: 'back.out(2)' });
-      gsap.to(mesh.material, { opacity: 1, duration: 0.5, delay: 0.3 + s * 0.4 });
+      
+      gsap.to(mesh.scale, { x: 1, y: 1, z: 1, duration: 0.8, delay: 0.4 + s * 0.3, ease: 'back.out(2)' });
+      gsap.to(mesh.material, { opacity: 1, duration: 0.6, delay: 0.4 + s * 0.3 });
+
       rollers.push({ mesh, progress: -s * 3.4, speed: 3.0 + s * 0.15, lastBumpIdx: -1 });
     }
-    setCamGoal(6, 4, 21, 0, 2, 0);
+    setCamGoal(6 + X_OFFSET, 4, 21, X_OFFSET, 2, 0);
   }
   function exit(){ steps = []; rollers = []; }
 
   function spawnStep(){
     const mesh = makeMesh('cube', PALETTE.cyan);
-    const x = stepIndex * STEP_DX, y = stepIndex * STEP_DY;
+    const x = stepIndex * STEP_DX + X_OFFSET, y = stepIndex * STEP_DY;
     mesh.position.set(x, y - 6, 0);
     world.add(mesh);
     gsap.to(mesh.position, { y, duration: 0.7, ease: 'elastic.out(1,0.7)' });
@@ -987,7 +985,7 @@ function makeChapter10(){
       const maxIdx = steps.length - 1;
       if(maxIdx < 1) return;
       if(r.progress < 0){
-        r.mesh.position.set(-3 + r.progress * 0.4, 1.2, 0);
+        r.mesh.position.set(-3 + X_OFFSET + r.progress * 0.4, 1.2, 0);
         return;
       }
       const idx = Math.min(Math.floor(r.progress), maxIdx - 1);
@@ -1003,12 +1001,18 @@ function makeChapter10(){
       r.mesh.rotation.z -= dt * 5;
       const hopNorm = Math.sin(localT * Math.PI);
       r.mesh.scale.set(1.12 - hopNorm * 0.22, 0.85 + hopNorm * 0.3, 1.12 - hopNorm * 0.22);
+
       if(idx !== r.lastBumpIdx && localT < 0.4){
         r.lastBumpIdx = idx;
         gsap.to(a.mesh.position, { y: a.y + 0.32, duration: 0.16, yoyo: true, repeat: 1, ease: 'power1.inOut' });
         flashConnection(r.mesh.position, a.mesh.position, PALETTE.pink);
       }
-      if(r.progress > maxIdx - 0.3){ r.progress = -rand(1.5, 3.5); r.lastBumpIdx = -1; }
+
+      if(r.progress > maxIdx - 0.3){
+        r.progress = -rand(1.5, 3.5);
+        r.lastBumpIdx = -1;
+        gsap.fromTo(r.mesh.scale, { x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1, duration: 0.6, ease: 'back.out(2)' });
+      }
     });
 
     if(lastStep) setCamGoal(lastStep.x - 2, lastStep.y + 3, 20, lastStep.x - 8, lastStep.y - 1, 0);
@@ -1017,9 +1021,7 @@ function makeChapter10(){
 }
 
 /* =========================================================================
-   CHAPTER 11 — El presente: a wall of spheres, pulsing and blinking, filling
-   the full frame, scrolling sideways in a truly seamless loop, and faint at
-   the center so it never fights with the headline text.
+   CHAPTER 11
    ========================================================================= */
 function makeChapter11(){
   let cells = [];
@@ -1071,8 +1073,7 @@ function makeChapter11(){
 }
 
 /* =========================================================================
-   CHAPTER 12 — El futuro se construye: a richer, continuously evolving
-   mandala of concentric counter-rotating rings around the photograph.
+   CHAPTER 12
    ========================================================================= */
 function makeChapter12(){
   let rings = [], net;
@@ -1105,7 +1106,6 @@ function makeChapter12(){
   function exit(){ rings = []; }
 
   function update(dt, t){
-    // stay on-palette: pulse between ink and orange instead of a free rainbow hue
     bgGoal.copy(new THREE.Color(PALETTE.ink).lerp(new THREE.Color(PALETTE.orange), 0.08 + Math.sin(t * 0.12) * 0.05));
     const all = [];
     rings.forEach(ring => {
@@ -1113,7 +1113,6 @@ function makeChapter12(){
         ring.reorgAt = t + rand(4, 7);
         gsap.to(ring, { radiusNow: ring.radius + rand(-1.6, 1.6), duration: 1.8, ease: 'sine.inOut' });
       }
-      // stay on-palette: keep the ring's own hue fixed, only its lightness breathes
       const col = new THREE.Color().setHSL(ring.baseHue, 0.75, 0.55 + Math.sin(t * 2) * 0.1);
       ring.items.forEach((it, idx) => {
         const a = it.angle + t * ring.speed;
@@ -1137,7 +1136,7 @@ function makeChapter12(){
 }
 
 /* =========================================================================
-   CHAPTER 13 — Cierre: a sphere jumps excitedly beside a slower, heavier cube.
+   CHAPTER 13
    ========================================================================= */
 function makeChapter13(){
   let sphere, cube;
@@ -1164,28 +1163,113 @@ function makeChapter13(){
 }
 
 /* =========================================================================
-   Slide metadata (copy, layout, theme, photo placeholders)
+   Slide metadata with ES / PT-BR Translations & Local Image Paths
    ========================================================================= */
+let currentLang = 'es';
+
+const UI_TEXT = {
+  es: { hint: '← → · espacio · clic para navegar', qr1: 'Recuerdos del evento', qr2: 'Fórum UPB · Instagram' },
+  pt: { hint: '← → · espaço · clique para navegar', qr1: 'Lembranças do evento', qr2: 'Fórum UPB · Instagram' }
+};
+
 const SLIDE_META = [
-  { headline: 'RELEVO GENERACIONAL<br><span class="em">La ventaja que nadie está aprovechando.</span>', sub: '', align: 'top', theme: 'light', accent: PALETTE.red },
-  { headline: '¿Un gran auditorio<br>solo para hacer grados?', sub: '', align: 'top', theme: 'light', accent: PALETTE.orange,
-    photo: { seed: 'upb-graduacion-2026', label: 'Graduación — foto de referencia' } },
-  { headline: 'Los eventos no llegaron a la Universidad.<br><span class="em">La Universidad decidió encontrarse con el mundo.</span>', sub: '', align: 'center', theme: 'dark', accent: PALETTE.cyan },
-  { headline: 'Academia + Industria + Ciudad', sub: '', align: 'top', theme: 'dark', accent: PALETTE.cyan,
-    photo: { seed: 'upb-ciudad-2026', label: 'Academia · Industria · Ciudad' } },
-  { headline: 'Los eventos nunca fueron el objetivo.<br><span class="em">El impacto sí.</span>', sub: '', align: 'top', theme: 'dark', accent: PALETTE.pink,
-    photo: { seed: 'upb-impacto-2026', label: 'Impacto — foto de referencia' } },
-  { headline: 'Un evento trae personas.<br>Una <span class="em">comunidad</span> trae <span class="em">transformación</span>.', sub: '', align: 'center', theme: 'dark', accent: PALETTE.pink },
-  { headline: 'El talento crece a la velocidad<br>de la <span class="em">confianza</span>.', sub: '', align: 'top', theme: 'light', accent: PALETTE.red },
-  { headline: 'La <span class="em">experiencia</span> construye el <span class="em">camino</span>.<br>Las nuevas generaciones descubren <span class="em">nuevas rutas</span>.', sub: '', align: 'top', theme: 'dark', accent: PALETTE.orange,
-    photo: { seed: 'upb-experiencia-2026', label: 'Experiencia — foto de referencia' } },
-  { headline: 'Una visión.<br><span class="em">Dos generaciones.</span>', sub: '', align: 'top', theme: 'light', accent: PALETTE.cyan },
-  { headline: 'El <span class="em">crecimiento</span> no ocurre cuando<br>una generación reemplaza a otra.<br>Ocurre cuando <span class="em">trabajan juntas</span>.', sub: '', align: 'top', theme: 'light', accent: PALETTE.red },
-  { headline: 'Los jóvenes no son el futuro.<br>Son el <span class="em">presente</span> que muchas<br>organizaciones aún no ven.', sub: '', align: 'center', theme: 'dark', accent: PALETTE.cyan },
-  { headline: 'El <span class="em">futuro</span> no se hereda.<br><span class="em">Se construye.</span>', sub: '', align: 'top', theme: 'dark', accent: PALETTE.pink,
-    photo: { seed: 'upb-futuro-2026', label: 'El futuro — foto de referencia' } },
-  { headline: 'Gracias.', sub: '', align: 'top-center', theme: 'light', accent: PALETTE.red, qr: true,
-    photo: { seed: 'upb-cierre-2026', label: 'Fórum UPB 2026' } }
+  {
+    headline: {
+      es: 'RELEVO GENERACIONAL<br><span class="em">La ventaja que nadie está aprovechando.</span>',
+      pt: 'TRANSIÇÃO GERACIONAL<br><span class="em">A vantagem que ninguém está aproveitando.</span>'
+    },
+    sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.red
+  },
+  {
+    headline: {
+      es: '¿Un gran auditorio<br>solo para hacer grados?',
+      pt: 'Um grande auditório<br>apenas para formaturas?'
+    },
+    sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.orange,
+    photo: { file: 'graduacion.webp', label: 'Graduación — foto de referencia' }
+  },
+  {
+    headline: {
+      es: 'Los eventos no llegaron a la Universidad.<br><span class="em">La Universidad decidió encontrarse con el mundo.</span>',
+      pt: 'Os eventos não chegaram à Universidade.<br><span class="em">A Universidade decidiu se encontrar com o mundo.</span>'
+    },
+    sub: { es: '', pt: '' }, align: 'center', theme: 'dark', accent: PALETTE.cyan
+  },
+  {
+    headline: {
+      es: 'Academia + Industria + Ciudad',
+      pt: 'Academia + Indústria + Cidade'
+    },
+    sub: { es: '', pt: '' }, align: 'top', theme: 'dark', accent: PALETTE.cyan,
+    photo: { file: 'ciudad.webp', label: 'Academia · Industria · Ciudad' }
+  },
+  {
+    headline: {
+      es: 'Los eventos nunca fueron el objetivo.<br><span class="em">El impacto sí.</span>',
+      pt: 'Os eventos nunca foram o objetivo.<br><span class="em">O impacto, sim.</span>'
+    },
+    sub: { es: '', pt: '' }, align: 'top', theme: 'dark', accent: PALETTE.pink,
+    photo: { file: 'impacto.webp', label: 'Impacto — foto de referencia' }
+  },
+  {
+    headline: {
+      es: 'Un evento trae personas.<br>Una <span class="em">comunidad</span> trae <span class="em">transformación</span>.',
+      pt: 'Um evento traz pessoas.<br>Uma <span class="em">comunidade</span> traz <span class="em">transformação</span>.'
+    },
+    sub: { es: '', pt: '' }, align: 'center', theme: 'dark', accent: PALETTE.pink
+  },
+  {
+    headline: {
+      es: 'El talento crece a la velocidad<br>de la <span class="em">confianza</span>.',
+      pt: 'O talento cresce na velocidade<br>da <span class="em">confiança</span>.'
+    },
+    sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.red
+  },
+  {
+    headline: {
+      es: 'La <span class="em">experiencia</span> construye el <span class="em">camino</span>.<br>Las nuevas generaciones descubren <span class="em">nuevas rutas</span>.',
+      pt: 'A <span class="em">experiência</span> constrói o <span class="em">caminho</span>.<br>As novas gerações descobrem <span class="em">novas rotas</span>.'
+    },
+    sub: { es: '', pt: '' }, align: 'top', theme: 'dark', accent: PALETTE.orange,
+    photo: { file: 'experiencia.webp', label: 'Experiencia — foto de referencia' }
+  },
+  {
+    headline: {
+      es: 'Una visión.<br><span class="em">Dos generaciones.</span>',
+      pt: 'Uma visão.<br><span class="em">Duas gerações.</span>'
+    },
+    sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.cyan
+  },
+  {
+    headline: {
+      es: 'El <span class="em">crecimiento</span> no ocurre cuando<br>una generación reemplaza a otra.<br>Ocurre cuando <span class="em">trabajan juntas</span>.',
+      pt: 'O <span class="em">crescimento</span> não acontece quando<br>uma geração substitui outra.<br>Acontece quando <span class="em">trabalham juntas</span>.'
+    },
+    sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.red
+  },
+  {
+    headline: {
+      es: 'Los jóvenes no son el futuro.<br>Son el <span class="em">presente</span> que muchas<br>organizaciones aún no ven.',
+      pt: 'Os jovens não são o futuro.<br>São o <span class="em">presente</span> que muitas<br>organizações ainda não veem.'
+    },
+    sub: { es: '', pt: '' }, align: 'center', theme: 'dark', accent: PALETTE.cyan
+  },
+  {
+    headline: {
+      es: 'El <span class="em">futuro</span> no se hereda.<br><span class="em">Se construye.</span>',
+      pt: 'O <span class="em">futuro</span> não se herda.<br><span class="em">Se constrói.</span>'
+    },
+    sub: { es: '', pt: '' }, align: 'top', theme: 'dark', accent: PALETTE.pink,
+    photo: { file: 'futuro.webp', label: 'El futuro — foto de referencia' }
+  },
+  {
+    headline: {
+      es: 'Gracias.',
+      pt: 'Obrigado.'
+    },
+    sub: { es: '', pt: '' }, align: 'top-center', theme: 'light', accent: PALETTE.red, qr: true,
+    photo: { file: 'cierre.webp', label: 'Fórum UPB 2026' }
+  }
 ];
 
 const chapterFactories = [
@@ -1212,6 +1296,15 @@ let current = -1;
 let clockStart = 0;
 const clock = new THREE.Clock();
 
+function updateSlideText(i){
+  if(i < 0 || i >= SLIDE_META.length) return;
+  const meta = SLIDE_META[i];
+  headlineEl.innerHTML = typeof meta.headline === 'object' ? meta.headline[currentLang] : meta.headline;
+  subtextEl.innerHTML = typeof meta.sub === 'object' ? meta.sub[currentLang] : (meta.sub || '');
+  document.getElementById('nav-hint').textContent = UI_TEXT[currentLang].hint;
+  document.getElementById('qr-text-1').textContent = UI_TEXT[currentLang].qr1;
+}
+
 function goTo(i){
   if(i < 0 || i >= chapters.length || i === current) return;
   const prev = current;
@@ -1222,15 +1315,16 @@ function goTo(i){
   const meta = SLIDE_META[i];
   document.body.className = 'theme-' + meta.theme;
   stageEl.style.setProperty('--accent', meta.accent);
-  headlineEl.innerHTML = meta.headline;
-  subtextEl.innerHTML = meta.sub || '';
+  
+  updateSlideText(i);
+  
   textLayerEl.dataset.align = meta.align;
   chapterIndexEl.textContent = String(i + 1).padStart(2, '0') + ' / ' + String(chapters.length).padStart(2, '0');
   progressFillEl.style.width = ((i + 1) / chapters.length * 100) + '%';
 
   if(meta.photo){
     photoFrameEl.classList.add('visible');
-    photoImgEl.style.backgroundImage = `url('https://picsum.photos/seed/${meta.photo.seed}/760/950')`;
+    photoImgEl.style.backgroundImage = `url('./assets/${meta.photo.file}')`;
     photoCaptionEl.textContent = meta.photo.label;
   } else {
     photoFrameEl.classList.remove('visible');
@@ -1241,6 +1335,16 @@ function goTo(i){
   clockStart = clock.getElapsedTime();
   chapters[i].enter(prev);
 }
+
+// Language switch handlers
+document.querySelectorAll('#lang-toggle button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#lang-toggle button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentLang = btn.dataset.lang;
+    updateSlideText(current);
+  });
+});
 
 window.addEventListener('keydown', (e) => {
   if(e.key === 'ArrowRight' || e.key === ' '){ e.preventDefault(); goTo(current + 1); }
@@ -1253,9 +1357,6 @@ window.addEventListener('keydown', (e) => {
 document.getElementById('tap-left').addEventListener('click', () => goTo(current - 1));
 document.getElementById('tap-right').addEventListener('click', () => goTo(current + 1));
 
-/* -------------------------------------------------------------------------
-   Stage fit (1920x1080 design surface scaled to any viewport)
-   ------------------------------------------------------------------------- */
 function fitStage(){
   const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
   const ox = (window.innerWidth - 1920 * scale) / 2;
@@ -1270,9 +1371,6 @@ window.addEventListener('resize', () => {
 });
 fitStage();
 
-/* -------------------------------------------------------------------------
-   Main loop
-   ------------------------------------------------------------------------- */
 function animate(){
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
