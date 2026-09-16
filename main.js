@@ -301,6 +301,59 @@ class Starfield {
 }
 
 /* -------------------------------------------------------------------------
+   FaintParticles
+   ------------------------------------------------------------------------- */
+class FaintParticles {
+  constructor(count = 60){
+    this.particles = [];
+    for(let i = 0; i < count; i++){
+      const shape = pick(['sphere', 'octa', 'tetra']);
+      const color = pick([PALETTE.cyan, PALETTE.pink, PALETTE.orange, PALETTE.cream]);
+      const mesh = makeMesh(shape, color);
+      cloneMaterialOf(mesh);
+      mesh.material.transparent = true;
+      mesh.material.opacity = rand(0.12, 0.28);
+      
+      const scale = rand(0.12, 0.28);
+      mesh.scale.setScalar(scale);
+
+      mesh.position.set(rand(-22, 22), rand(-12, 25), rand(-18, 5));
+      world.add(mesh);
+
+      this.particles.push({
+        mesh,
+        vx: rand(-0.8, 0.8),
+        vy: rand(-0.6, 1.2),
+        vz: rand(-0.8, 0.8),
+        rotX: rand(-1, 1),
+        rotY: rand(-1, 1)
+      });
+    }
+  }
+  update(dt){
+    this.particles.forEach(p => {
+      p.mesh.position.x += p.vx * dt * 2;
+      p.mesh.position.y += p.vy * dt * 2;
+      p.mesh.position.z += p.vz * dt * 2;
+
+      p.mesh.rotation.x += p.rotX * dt;
+      p.mesh.rotation.y += p.rotY * dt;
+
+      if(p.mesh.position.x > 25) p.mesh.position.x = -25;
+      if(p.mesh.position.x < -25) p.mesh.position.x = 25;
+      if(p.mesh.position.y > 30) p.mesh.position.y = -10;
+      if(p.mesh.position.y < -10) p.mesh.position.y = 30;
+      if(p.mesh.position.z > 10) p.mesh.position.z = -20;
+      if(p.mesh.position.z < -20) p.mesh.position.z = 10;
+    });
+  }
+  dispose(){
+    this.particles.forEach(p => world.remove(p.mesh));
+    this.particles = [];
+  }
+}
+
+/* -------------------------------------------------------------------------
    Disposal & Flashes
    ------------------------------------------------------------------------- */
 let disposables = [];
@@ -316,9 +369,11 @@ function clearWorld(){
 
 const flashEl = document.getElementById('flash');
 function triggerFlash(){
-  gsap.killTweensOf(flashEl);
-  gsap.set(flashEl, { opacity: 0.9 });
-  gsap.to(flashEl, { opacity: 0, duration: 1.1, ease: 'power2.out' });
+  if(flashEl) {
+    gsap.killTweensOf(flashEl);
+    gsap.set(flashEl, { opacity: 0.9 });
+    gsap.to(flashEl, { opacity: 0, duration: 1.1, ease: 'power2.out' });
+  }
 }
 
 function flashConnection(a, b, colorHex, opts){
@@ -450,7 +505,7 @@ function makeChapter1(){
    CHAPTER 2 — Línea de graduación
    ========================================================================= */
 function makeChapter2(){
-  let arc, spheres = [];
+  let arc, spheres = [], bgParticles;
   const N = 9, SPACING = 3.1, SPEED = 3.2;
   const RANGE = N * SPACING;
 
@@ -470,10 +525,12 @@ function makeChapter2(){
       world.add(mesh);
       spheres.push({ mesh, offset: i * SPACING, switched: false });
     }
+    bgParticles = new FaintParticles(60);
   }
-  function exit(){ spheres = []; }
+  function exit(){ spheres = []; bgParticles = null; }
 
   function update(dt, t){
+    if(bgParticles) bgParticles.update(dt);
     spheres.forEach(s => {
       const x = ((t * SPEED + s.offset) % RANGE) - RANGE / 2;
       s.mesh.position.x = x;
@@ -504,8 +561,10 @@ function makeChapter3(){
   let floaters = [], net, stars;
   const HOLD = 1.0, FLY_DUR = 3.0;
   const SHAPES = ['sphere', 'cube', 'octa', 'tetra', 'cone', 'cross'];
+  let logosInverted = false; // State to track logic color flip for this slide
 
   function enter(){
+    logosInverted = false;
     camSmooth = 0.03;
     setCamGoal(0, 1, 16.5, 0, 0.4, 0);
 
@@ -545,10 +604,18 @@ function makeChapter3(){
   function exit(){ floaters = []; }
 
   function update(dt, t){
-    stars.update(t);
+    if (stars) stars.update(t);
+    
     if(t > HOLD){
       const p = Math.min(1, (t - HOLD) / FLY_DUR);
       bgGoal.copy(new THREE.Color(PALETTE.cream).lerp(new THREE.Color(PALETTE.ink), p));
+    }
+    
+    // Invert the logos dynamically slightly after the movement starts
+    // so it happens while sliding through the dark arc.
+    if(t > HOLD + 1.2 && !logosInverted) {
+      logosInverted = true;
+      document.body.style.setProperty('--logo-invert', 1);
     }
 
     const settled = t >= HOLD + FLY_DUR;
@@ -579,7 +646,7 @@ function makeChapter3(){
         setColorOf(f.mesh, col);
       }
     });
-    if(settled){
+    if(settled && net){
       net.update(floaters.filter(f => f.spawned).map(f => f.mesh), 6.2);
       setCamGoal(Math.sin(t * 0.1) * 2, Math.sin(t * 0.15) * 1, -14 + Math.sin(t * 0.12) * 3, 0, 0, -18);
     }
@@ -587,9 +654,6 @@ function makeChapter3(){
   return { enter, update, exit };
 }
 
-/* =========================================================================
-   CHAPTER 4 — Academia + Industria + Ciudad (Glowing Heroes + Stardust)
-   ========================================================================= */
 /* =========================================================================
    CHAPTER 4 — Academia + Industria + Ciudad (Glowing Heroes + Stardust)
    ========================================================================= */
@@ -610,7 +674,6 @@ function makeChapter4(){
       mesh.scale.setScalar(1.25);
       world.add(mesh);
 
-      // Hero glow sprite halo
       const glow = makeGlow(d.color, 4.5);
       world.add(glow);
 
@@ -620,19 +683,16 @@ function makeChapter4(){
     });
 
     minions = [];
-    // Small ambient effect particles (stardust)
     for(let i = 0; i < 50; i++){
       const color = pick([PALETTE.orange, PALETTE.cyan, PALETTE.cream, PALETTE.pink]);
       const mesh = new THREE.Mesh(geoSphere, mat(color));
       cloneMaterialOf(mesh);
       
-      // Scaled down significantly from 0.05-0.11 to 0.015-0.035
       const size = rand(0.015, 0.035);
       mesh.scale.setScalar(size);
       
       if(mesh.material){
         mesh.material.transparent = true;
-        // Reduced opacity from 0.65-0.95 to 0.15-0.35 for a subtle special effect look
         mesh.material.opacity = rand(0.15, 0.35);
       }
       
@@ -661,19 +721,22 @@ function makeChapter4(){
       h.mesh.rotation.y += dt * 1.2;
       h.mesh.rotation.x += dt * 0.5;
 
-      // Pulse glow sprite intensity
       if(h.glow){
         h.glow.position.copy(h.mesh.position);
         const pulse = 4.2 + Math.sin(t * 4.0 + h.phase) * 1.4;
         h.glow.scale.set(pulse, pulse, 1);
       }
 
-      h.trail.spawn(h.mesh.position);
-      h.trail.spawn(h.mesh.position);
-      h.trail.decay(dt * 0.45);
+      if(h.trail) {
+        h.trail.spawn(h.mesh.position);
+        h.trail.spawn(h.mesh.position);
+        h.trail.decay(dt * 0.45);
+      }
       cx += h.mesh.position.x; cy += h.mesh.position.y; cz += h.mesh.position.z;
     });
-    cx /= heroes.length; cy /= heroes.length; cz /= heroes.length;
+    if(heroes.length > 0) {
+      cx /= heroes.length; cy /= heroes.length; cz /= heroes.length;
+    }
 
     minions.forEach(m => {
       m.angle += dt * m.rotSpeed;
@@ -705,7 +768,7 @@ function makeChapter4(){
    CHAPTER 5 — Red / mandala
    ========================================================================= */
 function makeChapter5(){
-  let parts = [], net;
+  let parts = [], net, bgParticles;
   const N = 34;
 
   function enter(){
@@ -721,11 +784,13 @@ function makeChapter5(){
     }
     net = new ConnectionNet(70, PALETTE.pink);
     world.add(net.mesh); disposables.push(net);
+    bgParticles = new FaintParticles(60);
     setCamGoal(0, 0, 19, 0, 0, 0);
   }
-  function exit(){ parts = []; }
+  function exit(){ parts = []; bgParticles = null; }
 
   function update(dt, t){
+    if(bgParticles) bgParticles.update(dt);
     bgGoal.copy(new THREE.Color(PALETTE.ink).lerp(new THREE.Color(PALETTE.forest), 0.35 + Math.sin(t * 0.18) * 0.25));
     parts.forEach(p => {
       const ang = p.angle + t * 0.13;
@@ -736,7 +801,7 @@ function makeChapter5(){
       p.mesh.rotation.z += dt * 0.6;
       p.mesh.rotation.x += dt * 0.2;
     });
-    net.update(parts.map(p => p.mesh), 3.3);
+    if(net) net.update(parts.map(p => p.mesh), 3.3);
     const dolly = 12.5 + Math.sin(t * 0.22) * 4.5;
     setCamGoal(Math.sin(t * 0.1) * 1.5, Math.cos(t * 0.08) * 1, dolly, 0, 0, -2);
   }
@@ -768,18 +833,20 @@ function makeChapter6(){
     }
     setCamGoal(0, 0, 15.5, 0, 0, 0);
   }
-  function exit(){ streaks = []; }
+  function exit(){ streaks = []; stars = null; }
 
   function update(dt, t){
     bgGoal.copy(new THREE.Color(PALETTE.ink).lerp(new THREE.Color(PALETTE.pink), 0.1 + Math.sin(t * 0.25) * 0.06));
-    stars.update(t);
+    if(stars) stars.update(t);
     streaks.forEach(s => {
       const x = ((t * s.speed + s.offset) % 40) - 20;
       s.mesh.position.set(x, s.y, s.z);
       s.mesh.rotation.x += dt * 1.2;
       s.mesh.rotation.y += dt * 1.6;
-      s.trail.spawn(s.mesh.position);
-      s.trail.decay(dt * 0.55);
+      if(s.trail) {
+        s.trail.spawn(s.mesh.position);
+        s.trail.decay(dt * 0.55);
+      }
     });
   }
   return { enter, update, exit };
@@ -789,7 +856,7 @@ function makeChapter6(){
    CHAPTER 7 — Confianza
    ========================================================================= */
 function makeChapter7(){
-  let runner, trail, obstacles = [], net, x = 0, connectionsMade = 0;
+  let runner, trail, obstacles = [], net, x = 0, connectionsMade = 0, bgParticles;
   const BASE_SPEED = 1.6, SPEED_PER_CONNECTION = 0.9, RANGE = 140, THRESH = 7.5;
 
   function enter(){
@@ -813,10 +880,13 @@ function makeChapter7(){
     }
     net = new ConnectionNet(30, PALETTE.ink, { blending: THREE.NormalBlending, opacity: 0.95 });
     world.add(net.mesh); disposables.push(net);
+    bgParticles = new FaintParticles(60);
   }
-  function exit(){ obstacles = []; }
+  function exit(){ obstacles = []; bgParticles = null; runner = null; trail = null; net = null; }
 
   function update(dt, t){
+    if(!runner) return;
+    if(bgParticles) bgParticles.update(dt);
     const speed = BASE_SPEED + connectionsMade * SPEED_PER_CONNECTION;
     x += dt * speed;
     if(x > RANGE / 2){ x = -RANGE / 2; connectionsMade = 0; obstacles.forEach(o => o.hit = false); }
@@ -825,8 +895,10 @@ function makeChapter7(){
     runner.rotation.z -= dt * speed * 0.9;
 
     const trailRate = Math.max(1, Math.floor(speed / 1.4));
-    for(let i = 0; i < trailRate; i++) trail.spawn(runner.position);
-    trail.decay(dt * 0.55);
+    if(trail) {
+      for(let i = 0; i < trailRate; i++) trail.spawn(runner.position);
+      trail.decay(dt * 0.55);
+    }
 
     const near = [];
     obstacles.forEach(o => {
@@ -835,7 +907,7 @@ function makeChapter7(){
         if(!o.hit){ o.hit = true; connectionsMade++; }
       }
     });
-    net.update([runner, ...near], THRESH + 0.6);
+    if(net) net.update([runner, ...near], THRESH + 0.6);
 
     setCamGoal(x + 3.6, 1.3, 12.5, x, 0.35, 0);
   }
@@ -843,10 +915,10 @@ function makeChapter7(){
 }
 
 /* =========================================================================
-   CHAPTER 8 — Experiencia y nuevas rutas (Faint Ambient Background Particles)
+   CHAPTER 8 — Experiencia y nuevas rutas
    ========================================================================= */
 function makeChapter8(){
-  let core, glow = null, branches = [], backgroundParticles = [], morphed = false;
+  let core, glow = null, branches = [], morphed = false, bgParticles;
   const RISE_SPAN = 40;
 
   function enter(){
@@ -881,75 +953,37 @@ function makeChapter8(){
       });
     }
 
-    // Faint background particles traveling along multi-directional 3D paths
-    backgroundParticles = [];
-    for(let i = 0; i < 60; i++){
-      const shape = pick(['sphere', 'octa', 'tetra']);
-      const color = pick([PALETTE.cyan, PALETTE.pink, PALETTE.orange, PALETTE.cream]);
-      const mesh = makeMesh(shape, color);
-      cloneMaterialOf(mesh);
-      mesh.material.transparent = true;
-      mesh.material.opacity = rand(0.12, 0.28);
-      
-      const scale = rand(0.12, 0.28);
-      mesh.scale.setScalar(scale);
-
-      mesh.position.set(rand(-22, 22), rand(-12, 25), rand(-18, 5));
-      world.add(mesh);
-
-      backgroundParticles.push({
-        mesh,
-        vx: rand(-0.8, 0.8),
-        vy: rand(-0.6, 1.2),
-        vz: rand(-0.8, 0.8),
-        rotX: rand(-1, 1),
-        rotY: rand(-1, 1)
-      });
-    }
+    bgParticles = new FaintParticles(60);
 
     gsap.delayedCall(1.8, () => {
       morphed = true;
       branches.forEach((b, idx) => {
-        gsap.to(b.mesh.scale, {
-          x: 0.52, y: 0.52, z: 0.52,
-          duration: 1.2,
-          delay: idx * 0.2,
-          ease: 'back.out(1.8)',
-          onStart: () => { b.released = true; }
-        });
+        if(b && b.mesh) {
+          gsap.to(b.mesh.scale, {
+            x: 0.52, y: 0.52, z: 0.52,
+            duration: 1.2,
+            delay: idx * 0.2,
+            ease: 'back.out(1.8)',
+            onStart: () => { b.released = true; }
+          });
+        }
       });
     });
 
     setCamGoal(0, 1, 13.5, 0, 1, 0);
   }
 
-  function exit(){ branches = []; backgroundParticles = []; }
+  function exit(){ branches = []; bgParticles = null; core = null; glow = null; }
 
   function update(dt, t){
-    core.rotation.y += dt * 0.3;
-    if(glow){
+    if(core) core.rotation.y += dt * 0.3;
+    if(glow && core){
       glow.position.copy(core.position);
       const pulse = 4.6 + Math.sin(t * 2) * 0.5;
       glow.scale.set(pulse, pulse, 1);
     }
 
-    // Move background faint particles along unique trajectories
-    backgroundParticles.forEach(p => {
-      p.mesh.position.x += p.vx * dt * 2;
-      p.mesh.position.y += p.vy * dt * 2;
-      p.mesh.position.z += p.vz * dt * 2;
-
-      p.mesh.rotation.x += p.rotX * dt;
-      p.mesh.rotation.y += p.rotY * dt;
-
-      // Coordinate wrapping
-      if(p.mesh.position.x > 25) p.mesh.position.x = -25;
-      if(p.mesh.position.x < -25) p.mesh.position.x = 25;
-      if(p.mesh.position.y > 30) p.mesh.position.y = -10;
-      if(p.mesh.position.y < -10) p.mesh.position.y = 30;
-      if(p.mesh.position.z > 10) p.mesh.position.z = -20;
-      if(p.mesh.position.z < -20) p.mesh.position.z = 10;
-    });
+    if(bgParticles) bgParticles.update(dt);
 
     if(morphed){
       let cx = 0, cy = 0, cz = 0;
@@ -969,8 +1003,10 @@ function makeChapter8(){
 
         b.mesh.rotation.x += dt * 2;
         b.mesh.rotation.y += dt * 1.5;
-        b.trail.spawn(b.mesh.position);
-        b.trail.decay(dt * 0.65);
+        if(b.trail) {
+          b.trail.spawn(b.mesh.position);
+          b.trail.decay(dt * 0.65);
+        }
 
         cx += b.mesh.position.x; cy += y; cz += b.mesh.position.z;
       });
@@ -988,15 +1024,16 @@ function makeChapter8(){
    CHAPTER 9 — Torre infinita
    ========================================================================= */
 function makeChapter9(){
-  let pieces = [], spawnAcc = 0, topY = 0, count = 0;
+  let pieces = [], spawnAcc = 0, topY = 0, count = 0, bgParticles;
   const CAP = 46, GAP = 1.5, DROP_DUR = 0.55, SPAWN_RATE = 0.4;
 
   function enter(){
     camSmooth = 0.03;
     pieces = []; spawnAcc = 0; topY = -3; count = 0;
+    bgParticles = new FaintParticles(60);
     setCamGoal(6, 2, 19, 0, 2, 0);
   }
-  function exit(){ pieces = []; }
+  function exit(){ pieces = []; bgParticles = null; }
 
   function spawnPiece(){
     const shape = count % 2 === 0 ? 'cube' : 'sphere';
@@ -1014,6 +1051,7 @@ function makeChapter9(){
   }
 
   function update(dt, t){
+    if(bgParticles) bgParticles.update(dt);
     spawnAcc += dt;
     if(spawnAcc > SPAWN_RATE){ spawnAcc = 0; spawnPiece(); }
     pieces.forEach(p => { p.mesh.rotation.y += dt * 0.05; });
@@ -1026,13 +1064,14 @@ function makeChapter9(){
    CHAPTER 10 — Escalera
    ========================================================================= */
 function makeChapter10(){
-  let steps = [], rollers = [], spawnAcc = 0, stepIndex = 0;
+  let steps = [], rollers = [], spawnAcc = 0, stepIndex = 0, bgParticles;
   const CAP = 40, STEP_DX = 2.0, STEP_DY = 1.05, SPAWN_RATE = 0.45;
   const OFFSET_X = 6.0;
 
   function enter(){
     camSmooth = 0.03;
     steps = []; rollers = []; spawnAcc = 0; stepIndex = 0;
+    bgParticles = new FaintParticles(60);
 
     for(let s = 0; s < 3; s++){
       const mesh = makeMesh('sphere', PALETTE.red);
@@ -1050,7 +1089,7 @@ function makeChapter10(){
     }
     setCamGoal(OFFSET_X + 6, 4, 21, OFFSET_X, 2, 0);
   }
-  function exit(){ steps = []; rollers = []; }
+  function exit(){ steps = []; rollers = []; bgParticles = null; }
 
   function spawnStep(){
     const mesh = makeMesh('cube', PALETTE.cyan);
@@ -1073,6 +1112,7 @@ function makeChapter10(){
   }
 
   function update(dt, t){
+    if(bgParticles) bgParticles.update(dt);
     spawnAcc += dt;
     if(steps.length < 6 || spawnAcc > SPAWN_RATE){ spawnAcc = 0; spawnStep(); }
 
@@ -1221,7 +1261,7 @@ function makeChapter12(){
         all.push(it.mesh);
       });
     });
-    net.update(all, 2.6);
+    if(net) net.update(all, 2.6);
     setCamGoal(Math.sin(t * 0.07) * 2, Math.cos(t * 0.05) * 1.4, 20 + Math.sin(t * 0.1) * 3, 0, 0, -3);
   }
   return { enter, update, exit };
@@ -1231,7 +1271,7 @@ function makeChapter12(){
    CHAPTER 13 — Cierre
    ========================================================================= */
 function makeChapter13(){
-  let sphere, cube;
+  let sphere, cube, bgParticles;
   function enter(){
     camSmooth = 0.06;
     sphere = makeMesh('sphere', PALETTE.red);
@@ -1239,11 +1279,13 @@ function makeChapter13(){
     sphere.position.set(-2.3, 0, 0);
     cube.position.set(2.1, 0, 0);
     world.add(sphere, cube);
+    bgParticles = new FaintParticles(60);
     setCamGoal(0, 1, 14.5, 0, 0.6, 0);
   }
-  function exit(){ sphere = null; cube = null; }
+  function exit(){ sphere = null; cube = null; bgParticles = null; }
   function update(dt, t){
-    if(!sphere) return;
+    if(bgParticles) bgParticles.update(dt);
+    if(!sphere || !cube) return;
     sphere.position.y = Math.abs(Math.sin(t * 4.2)) * 1.9;
     sphere.rotation.z -= dt * 6;
     const cubeJump = Math.abs(Math.sin(t * 1.9));
@@ -1352,7 +1394,7 @@ const SLIDE_META = [
       es: 'Gracias.',
       pt: 'Obrigado.'
     },
-    sub: { es: '', pt: '' }, align: 'top-center', theme: 'light', accent: PALETTE.red, qr: true,
+    sub: { es: '', pt: '' }, align: 'top-center', theme: 'dark', accent: PALETTE.red, qr: true,
     photo: { file: 'assets/upb-cierre-2026.webp', label: { es: 'Fórum UPB 2026', pt: 'Fórum UPB 2026' } } 
   }
 ];
@@ -1401,22 +1443,25 @@ const clock = new THREE.Clock();
 function updateText(){
   if(current < 0) return;
   const meta = SLIDE_META[current];
-  headlineEl.innerHTML = meta.headline[currentLang];
-  subtextEl.innerHTML = meta.sub[currentLang] || '';
   
-  if(meta.photo){
+  if(headlineEl) headlineEl.innerHTML = meta.headline[currentLang];
+  if(subtextEl) subtextEl.innerHTML = meta.sub[currentLang] || '';
+  
+  if(meta.photo && photoCaptionEl){
     photoCaptionEl.textContent = meta.photo.label[currentLang];
   }
   
-  qrLabel1.textContent = UI_TEXTS[currentLang].qr1;
-  qrLabel2.textContent = UI_TEXTS[currentLang].qr2;
-  navHint.textContent = UI_TEXTS[currentLang].hint;
+  if(qrLabel1) qrLabel1.textContent = UI_TEXTS[currentLang].qr1;
+  if(qrLabel2) qrLabel2.textContent = UI_TEXTS[currentLang].qr2;
+  if(navHint) navHint.textContent = UI_TEXTS[currentLang].hint;
 }
 
-langBtn.addEventListener('click', () => {
-  currentLang = currentLang === 'es' ? 'pt' : 'es';
-  updateText();
-});
+if(langBtn) {
+  langBtn.addEventListener('click', () => {
+    currentLang = currentLang === 'es' ? 'pt' : 'es';
+    updateText();
+  });
+}
 
 function goTo(i){
   if(i < 0 || i >= chapters.length || i === current) return;
@@ -1427,25 +1472,35 @@ function goTo(i){
 
   const meta = SLIDE_META[i];
   document.body.className = 'theme-' + meta.theme;
-  stageEl.style.setProperty('--accent', meta.accent);
+  if(stageEl) stageEl.style.setProperty('--accent', meta.accent);
   
   updateText();
   
-  textLayerEl.dataset.align = meta.align;
-  chapterIndexEl.textContent = String(i + 1).padStart(2, '0') + ' / ' + String(chapters.length).padStart(2, '0');
-  progressFillEl.style.width = ((i + 1) / chapters.length * 100) + '%';
+  // Handled targeted white logos based on slide numbers (1-based index)
+  const whiteSlides = [3, 4, 5, 6, 8, 11, 12, 13];
+  const slideNum = i + 1;
+  if (i === 2) {
+    // Chapter 3 handles its own transition, start it at 0 (black)
+    document.body.style.setProperty('--logo-invert', 0);
+  } else {
+    document.body.style.setProperty('--logo-invert', whiteSlides.includes(slideNum) ? 1 : 0);
+  }
+
+  if(textLayerEl) textLayerEl.dataset.align = meta.align;
+  if(chapterIndexEl) chapterIndexEl.textContent = String(i + 1).padStart(2, '0') + ' / ' + String(chapters.length).padStart(2, '0');
+  if(progressFillEl) progressFillEl.style.width = ((i + 1) / chapters.length * 100) + '%';
 
   if(meta.photo){
-    photoFrameEl.classList.add('visible');
-    photoImgEl.style.backgroundImage = `url('${meta.photo.file}')`;
+    if(photoFrameEl) photoFrameEl.classList.add('visible');
+    if(photoImgEl) photoImgEl.style.backgroundImage = `url('${meta.photo.file}')`;
   } else {
-    photoFrameEl.classList.remove('visible');
+    if(photoFrameEl) photoFrameEl.classList.remove('visible');
   }
-  qrRowEl.classList.toggle('visible', !!meta.qr);
+  if(qrRowEl) qrRowEl.classList.toggle('visible', !!meta.qr);
 
   setBgGoal(meta.theme === 'dark' ? PALETTE.ink : PALETTE.cream);
   clockStart = clock.getElapsedTime();
-  chapters[i].enter(prev);
+  chapters[i].enter();
 }
 
 window.addEventListener('keydown', (e) => {
@@ -1456,8 +1511,9 @@ window.addEventListener('keydown', (e) => {
     else document.exitFullscreen().catch(() => {});
   }
 });
-document.getElementById('tap-left').addEventListener('click', () => goTo(current - 1));
-document.getElementById('tap-right').addEventListener('click', () => goTo(current + 1));
+
+document.getElementById('tap-left')?.addEventListener('click', () => goTo(current - 1));
+document.getElementById('tap-right')?.addEventListener('click', () => goTo(current + 1));
 
 /* -------------------------------------------------------------------------
    Stage fit
@@ -1466,7 +1522,7 @@ function fitStage(){
   const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
   const ox = (window.innerWidth - 1920 * scale) / 2;
   const oy = (window.innerHeight - 1080 * scale) / 2;
-  stageEl.style.transform = `translate(${ox}px, ${oy}px) scale(${scale})`;
+  if(stageEl) stageEl.style.transform = `translate(${ox}px, ${oy}px) scale(${scale})`;
 }
 window.addEventListener('resize', () => {
   fitStage();
@@ -1483,7 +1539,9 @@ function animate(){
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.getElapsedTime() - clockStart;
-  if(chapters[current]) chapters[current].update(dt, t);
+  if(chapters[current] && typeof chapters[current].update === 'function') {
+    chapters[current].update(dt, t);
+  }
   updateCamera(dt, clock.getElapsedTime());
   bgColor.lerp(bgGoal, 1 - Math.pow(0.01, dt));
   renderer.render(scene, camera);

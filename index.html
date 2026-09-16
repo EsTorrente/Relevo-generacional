@@ -21,12 +21,12 @@
     <div id="ui-layer">
       <!-- Institutional Persistent Logos -->
       <div class="logo-bottom-left">
-        <img src="name.webp" alt="Centro de Eventos Logo" class="logo-pdf logo-name">
+        <img src="assets/nameBlack.webp" alt="Centro de Eventos Logo" id="logo-name" class="logo-pdf logo-name">
       </div>
 
       <div class="top-controls">
-        <img src="year.webp" alt="2026 Logo" class="logo-pdf logo-year">
         <button id="lang-toggle" class="lang-btn">ES / PT-BR</button>
+        <img src="assets/yearBlack.webp" alt="2026 Logo" id="logo-year" class="logo-pdf logo-year">
       </div>
 
       <div class="handle-bottom-right">
@@ -39,11 +39,14 @@
       </div>
 
       <figure class="photo-frame" id="photo-frame">
-        <div class="photo-frame__img" id="photo-img"></div>
-        <figcaption id="photo-caption"></figcaption>
+        <!-- New wrapper for the idle animation -->
+        <div class="photo-idle-wrapper">
+          <div class="photo-frame__img" id="photo-img"></div>
+        </div>
       </figure>
 
       <div class="qr-row" id="qr-row">
+        <!-- QR codes -->
         <div class="qr-chip">
           <div class="qr-mark" data-seed="1"></div>
           <span id="qr-label-1">Recuerdos del evento</span>

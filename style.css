@@ -100,7 +100,13 @@ body.theme-light{ --fg: var(--ink); --bg: var(--cream); --panel-rgb: 255,251,242
   width: auto;
   object-fit: contain;
   display: block;
-  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.15));
+  /* Driven by JS to invert from black to white */
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.15)) invert(var(--logo-invert, 0));
+  transition: filter 1.4s cubic-bezier(.4,0,.2,1);
+}
+
+.logo-year {
+  height: 64px;
 }
 
 .top-controls {
@@ -309,9 +315,24 @@ body.theme-light{ --fg: var(--ink); --bg: var(--cream); --panel-rgb: 255,251,242
   color:var(--fg);
 }
 
+/* Fix unclickable buttons by placing tap zones under the UI layer */
 .tap-zone{
   position:fixed; top:0; bottom:0; width:20%;
-  z-index:15; cursor:pointer;
+  z-index:9; /* Changed from 15 to 9 */
+  cursor:pointer;
 }
 .tap-zone--left{ left:0; }
 .tap-zone--right{ right:0; }
+
+/* Idle animation for the photos */
+@keyframes idleFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-12px); }
+}
+
+.photo-idle-wrapper {
+  animation: idleFloat 5s ease-in-out infinite;
+  transform-style: preserve-3d;
+  width: 100%;
+  height: 100%;
+}
