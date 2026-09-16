@@ -176,14 +176,41 @@ body.theme-light{ --fg: var(--ink); --bg: var(--cream); --panel-rgb: 255,251,242
   font-weight:inherit;
 }
 
-.photo-frame{
-  position:absolute;
-  bottom:86px; right:96px;
-  width:460px;
-  opacity:0; transform:translateY(24px) scale(0.98);
-  transition:opacity 1s cubic-bezier(.4,0,.2,1), transform 1s cubic-bezier(.4,0,.2,1);
+/* Persistent Logo Placements */
+.pdf-logo {
+  position: absolute;
+  width: 160px; /* Adjust as needed for your PDFs */
+  height: 60px; 
+  z-index: 20;
+  pointer-events: none;
 }
-.photo-frame.visible{ opacity:1; transform:translateY(0) scale(1); }
+.pdf-logo.bottom-left {
+  bottom: 64px;
+  left: 64px;
+}
+.pdf-logo.top-right {
+  top: 56px;
+  right: 220px; /* Offset to not collide with the language button */
+}
+.handle-bottom-right {
+  position: absolute;
+  bottom: 64px;
+  right: 64px;
+  z-index: 20;
+}
+
+/* 3D Image Integration */
+.photo-frame {
+  /* ... keep your existing properties ... */
+  transform-style: preserve-3d;
+  perspective: 1200px;
+}
+
+.photo-frame.visible {
+  opacity: 0.85; /* Slight transparency fade */
+  /* This gives the HTML element a 3D tilt, making it look like a floating glass panel */
+  transform: perspective(1200px) rotateY(-12deg) rotateX(4deg) translateY(0) scale(1);
+}
 
 .photo-frame__img{
   width:100%;

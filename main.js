@@ -590,8 +590,11 @@ function makeChapter3(){
 /* =========================================================================
    CHAPTER 4 — Academia + Industria + Ciudad (Force Field Physics)
    ========================================================================= */
+/* =========================================================================
+   CHAPTER 4 — Academia + Industria + Ciudad (Stardust Orbit)
+   ========================================================================= */
 function makeChapter4(){
-  let heroes = [], minions = [];
+  let heroes = [], stardust = [];
   const RISE_SPAN = 44;
 
   function enter(){
@@ -606,69 +609,75 @@ function makeChapter4(){
       cloneMaterialOf(mesh);
       mesh.scale.setScalar(1.25);
       world.add(mesh);
+      
       const trail = new TrailSystem(220, d.color, 260);
       world.add(trail.points); disposables.push(trail);
-      return { ...d, mesh, trail, radius: 3.5, speed: 0.5 };
+      
+      // Add the glow sprite
+      const glow = makeGlow(d.color, 6);
+      world.add(glow);
+
+      return { ...d, mesh, trail, glow, radius: 3.5, speed: 0.5 };
     });
 
-    minions = [];
-    for(let i = 0; i < 28; i++){
-      const shape = Math.random() < 0.5 ? 'sphere' : 'cube';
-      const color = Math.random() < 0.5 ? PALETTE.orange : PALETTE.cyan;
-      const mesh = makeMesh(shape, color);
-      mesh.scale.setScalar(0.28 + Math.random() * 0.22);
-      const orbitR = rand(4.5, 8.5);
-      const orbitAngle = rand(0, TWO_PI);
-      mesh.position.set(Math.cos(orbitAngle) * orbitR, rand(-20, -2), Math.sin(orbitAngle) * orbitR);
+    stardust = [];
+    // Generate small stardust particles
+    for(let i = 0; i < 180; i++){
+      const mesh = makeMesh('sphere', PALETTE.cream);
+      mesh.scale.setScalar(rand(0.03, 0.09));
       world.add(mesh);
-      minions.push({
+      stardust.push({
         mesh,
-        orbitR,
-        angle: orbitAngle,
-        rotSpeed: rand(0.8, 1.6) * (Math.random() < 0.5 ? 1 : -1)
+        targetHero: Math.floor(Math.random() * heroes.length), // Assign to a hero
+        orbitR: rand(1.5, 4.0),
+        angle: rand(0, TWO_PI),
+        rotSpeed: rand(1.5, 3.5) * (Math.random() < 0.5 ? 1 : -1),
+        yOffset: rand(-1.5, 1.5)
       });
     }
   }
-  function exit(){ heroes = []; minions = []; }
+  
+  function exit(){ heroes = []; stardust = []; }
 
   function update(dt, t){
     let cx = 0, cy = 0, cz = 0;
+    
+    // Update Heroes
     heroes.forEach(h => {
       const y = (t * 1.9) % RISE_SPAN - RISE_SPAN * 0.35;
       const a = h.phase + t * h.speed * TWO_PI * 0.42;
       const r = h.radius + Math.sin(t * 1.1 + h.phase) * 1.15;
+      
       h.mesh.position.set(Math.cos(a) * r, y, Math.sin(a) * r);
       h.mesh.rotation.y += dt * 1.2;
       h.mesh.rotation.x += dt * 0.5;
-      h.trail.spawn(h.mesh.position);
+      
+      // Pulse scale
+      const pulse = 1.25 + Math.sin(t * 5 + h.phase) * 0.2;
+      h.mesh.scale.setScalar(pulse);
+      
+      // Update glow
+      h.glow.position.copy(h.mesh.position);
+      const glowPulse = 5 + Math.sin(t * 5 + h.phase) * 1.5;
+      h.glow.scale.setScalar(glowPulse);
+
       h.trail.spawn(h.mesh.position);
       h.trail.decay(dt * 0.45);
       cx += h.mesh.position.x; cy += h.mesh.position.y; cz += h.mesh.position.z;
     });
     cx /= heroes.length; cy /= heroes.length; cz /= heroes.length;
 
-    minions.forEach(m => {
+    // Update Stardust Orbits
+    stardust.forEach(m => {
       m.angle += dt * m.rotSpeed;
+      const h = heroes[m.targetHero];
       
-      const targetX = cx + Math.cos(m.angle) * m.orbitR;
-      const targetZ = cz + Math.sin(m.angle) * m.orbitR;
-      const targetY = cy + Math.sin(t * 2 + m.angle) * 2;
+      // Orbit around the assigned hero with a slight sine wave variation
+      const targetX = h.mesh.position.x + Math.cos(m.angle) * m.orbitR;
+      const targetZ = h.mesh.position.z + Math.sin(m.angle) * m.orbitR;
+      const targetY = h.mesh.position.y + m.yOffset + Math.sin(t * 2 + m.angle) * 0.8;
       
-      let pushVec = new THREE.Vector3();
-      heroes.forEach(h => {
-        const dVec = new THREE.Vector3().subVectors(m.mesh.position, h.mesh.position);
-        const dist = dVec.length();
-        if(dist < 3.8 && dist > 0.001){
-          const force = (3.8 - dist) / 3.8;
-          pushVec.add(dVec.normalize().multiplyScalar(force * 6.0));
-        }
-      });
-
-      _tmpVecA.set(targetX, targetY, targetZ).add(pushVec).sub(m.mesh.position);
-      m.mesh.position.addScaledVector(_tmpVecA, dt * 2.8);
-      
-      m.mesh.rotation.y += dt * 1.5;
-      m.mesh.rotation.x += dt * 0.8;
+      m.mesh.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), dt * 5.0);
     });
 
     setCamGoal(cx + 7.5, cy + 2, cz + 11, cx, cy, cz);
@@ -822,6 +831,7 @@ function makeChapter7(){
    ========================================================================= */
 function makeChapter8(){
   let core, glow = null, branches = [], morphed = false;
+  let bgParticles = [];
   const RISE_SPAN = 40;
 
   function enter(){
@@ -855,6 +865,22 @@ function makeChapter8(){
         radius: 1.6 + i * 0.4, wobble: rand(0, TWO_PI), released: false
       });
     }
+    
+    // Faint drifting background particles
+    bgParticles = [];
+    for(let i = 0; i < 65; i++){
+      const p = makeMesh('sphere', PALETTE.cream);
+      cloneMaterialOf(p);
+      p.material.transparent = true;
+      p.material.opacity = rand(0.1, 0.35);
+      p.scale.setScalar(rand(0.05, 0.15));
+      p.position.set(rand(-20, 20), rand(-15, 15), rand(-20, -5));
+      world.add(p);
+      bgParticles.push({
+        mesh: p,
+        vx: rand(-1.5, 1.5), vy: rand(-1.5, 1.5), vz: rand(-1.5, 1.5)
+      });
+    }
 
     gsap.delayedCall(1.8, () => {
       morphed = true;
@@ -872,7 +898,7 @@ function makeChapter8(){
     setCamGoal(0, 1, 13.5, 0, 1, 0);
   }
 
-  function exit(){ branches = []; }
+  function exit(){ branches = []; bgParticles = []; }
 
   function update(dt, t){
     core.rotation.y += dt * 0.3;
@@ -881,6 +907,18 @@ function makeChapter8(){
       const pulse = 4.6 + Math.sin(t * 2) * 0.5;
       glow.scale.set(pulse, pulse, 1);
     }
+    
+    // Update drifting particles with bounds wrapping
+    bgParticles.forEach(p => {
+      p.mesh.position.x += p.vx * dt;
+      p.mesh.position.y += p.vy * dt;
+      p.mesh.position.z += p.vz * dt;
+      
+      if(p.mesh.position.x > 25) p.mesh.position.x = -25;
+      else if(p.mesh.position.x < -25) p.mesh.position.x = 25;
+      if(p.mesh.position.y > 20) p.mesh.position.y = -20;
+      else if(p.mesh.position.y < -20) p.mesh.position.y = 20;
+    });
 
     if(morphed){
       let cx = 0, cy = 0, cz = 0;
