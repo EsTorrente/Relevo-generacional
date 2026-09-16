@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Relevo Generacional — Fórum UPB 2026</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://api.fontshare.com">
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=clash-display@600,500&f[]=general-sans@400,500,600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+</head>
+<body>
+
+  <canvas id="scene"></canvas>
+  <div id="vignette"></div>
+  <div id="grain"></div>
+  <div id="flash"></div>
+
+  <div id="stage">
+    <div id="ui-layer">
+      <div class="handle">@centrodeeventosupb</div>
+
+      <div class="text-layer" id="text-layer" data-align="top">
+        <div class="headline" id="headline"></div>
+        <div class="subtext" id="subtext"></div>
+      </div>
+
+      <figure class="photo-frame" id="photo-frame">
+        <div class="photo-frame__img" id="photo-img"></div>
+        <figcaption id="photo-caption"></figcaption>
+      </figure>
+
+      <div class="qr-row" id="qr-row">
+        <div class="qr-chip">
+          <div class="qr-mark" data-seed="1"></div>
+          <span>Recuerdos del evento</span>
+        </div>
+        <div class="qr-chip">
+          <div class="qr-mark" data-seed="2"></div>
+          <span>Fórum UPB · Instagram</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="chapter-index" id="chapter-index"></div>
+
+    <div class="navigation">
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="hint">← → · espacio · clic para navegar</div>
+    </div>
+  </div>
+
+  <div class="tap-zone tap-zone--left" id="tap-left"></div>
+  <div class="tap-zone tap-zone--right" id="tap-right"></div>
+
+<script src="main.js"></script>
+</body>
+</html>
