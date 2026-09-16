@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Relevo Generacional — Fórum UPB 2026</title> 
+<title>Relevo Generacional — Fórum UPB 2026</title>
 <link rel="stylesheet" href="style.css">
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=clash-display@600,500&f[]=general-sans@400,500,600&display=swap">
@@ -19,13 +19,10 @@
 
   <div id="stage">
     <div id="ui-layer">
-      <!-- Language Toggle -->
-      <div id="lang-toggle" class="lang-toggle">
-        <button data-lang="es" class="active">ES</button>
-        <button data-lang="pt">PT-BR</button>
+      <div class="top-controls">
+        <button id="lang-toggle" class="lang-btn">ES / PT-BR</button>
+        <div class="handle">@centrodeeventosupb</div>
       </div>
-
-      <div class="handle">@centrodeeventosupb</div>
 
       <div class="text-layer" id="text-layer" data-align="top">
         <div class="headline" id="headline"></div>
@@ -40,11 +37,11 @@
       <div class="qr-row" id="qr-row">
         <div class="qr-chip">
           <div class="qr-mark" data-seed="1"></div>
-          <span id="qr-text-1">Recuerdos del evento</span>
+          <span id="qr-label-1">Recuerdos del evento</span>
         </div>
         <div class="qr-chip">
           <div class="qr-mark" data-seed="2"></div>
-          <span>Fórum UPB · Instagram</span>
+          <span id="qr-label-2">Fórum UPB · Instagram</span>
         </div>
       </div>
     </div>

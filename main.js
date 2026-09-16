@@ -18,6 +18,8 @@ function rand(a, b){ return a + Math.random() * (b - a); }
 function pick(arr){ return arr[Math.floor(Math.random() * arr.length)]; }
 function easeOutCubic(p){ return 1 - Math.pow(1 - p, 3); }
 
+let currentLang = 'es';
+
 /* -------------------------------------------------------------------------
    Renderer / Scene / Camera
    ------------------------------------------------------------------------- */
@@ -140,7 +142,7 @@ function makeGlow(colorHex, scale){
 }
 
 /* -------------------------------------------------------------------------
-   TrailSystem & ConnectionNet & Starfield
+   TrailSystem
    ------------------------------------------------------------------------- */
 class TrailSystem {
   constructor(count, baseColorHex, pointSize){
@@ -210,6 +212,9 @@ class TrailSystem {
   dispose(){ this.geometry.dispose(); this.material.dispose(); }
 }
 
+/* -------------------------------------------------------------------------
+   ConnectionNet
+   ------------------------------------------------------------------------- */
 class ConnectionNet {
   constructor(maxConnections, colorHex, opts){
     opts = opts || {};
@@ -248,6 +253,9 @@ class ConnectionNet {
   dispose(){ this.geometry.dispose(); this.material.dispose(); }
 }
 
+/* -------------------------------------------------------------------------
+   Starfield
+   ------------------------------------------------------------------------- */
 class Starfield {
   constructor(count){
     const positions = new Float32Array(count * 3);
@@ -292,6 +300,9 @@ class Starfield {
   dispose(){ this.geometry.dispose(); this.material.dispose(); }
 }
 
+/* -------------------------------------------------------------------------
+   Disposal & Flashes
+   ------------------------------------------------------------------------- */
 let disposables = [];
 let clonedMaterials = [];
 
@@ -310,7 +321,10 @@ function triggerFlash(){
   gsap.to(flashEl, { opacity: 0, duration: 1.1, ease: 'power2.out' });
 }
 
-function makeConnectionBeam(a, b, colorHex, radius = 0.075){
+function flashConnection(a, b, colorHex, opts){
+  const radius = (opts && opts.radius) || 0.075;
+  const hold = (opts && opts.hold) || 0.16;
+  const fade = (opts && opts.fade) || 0.55;
   const dir = new THREE.Vector3().subVectors(b, a);
   const len = Math.max(0.001, dir.length());
   const geo = new THREE.CylinderGeometry(radius, radius, len, 8, 1, true);
@@ -318,16 +332,8 @@ function makeConnectionBeam(a, b, colorHex, radius = 0.075){
   const mesh = new THREE.Mesh(geo, m);
   mesh.position.copy(a).addScaledVector(dir, 0.5);
   mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
-  return { mesh, geo, m };
-}
-
-function flashConnection(a, b, colorHex, opts){
-  const radius = (opts && opts.radius) || 0.075;
-  const hold = (opts && opts.hold) || 0.16;
-  const fade = (opts && opts.fade) || 0.55;
-  const beam = makeConnectionBeam(a, b, colorHex, radius);
-  world.add(beam.mesh);
-  gsap.to(beam.m, { opacity: 0, duration: fade, delay: hold, onComplete: () => { world.remove(beam.mesh); beam.geo.dispose(); beam.m.dispose(); } });
+  world.add(mesh);
+  gsap.to(m, { opacity: 0, duration: fade, delay: hold, onComplete: () => { world.remove(mesh); geo.dispose(); m.dispose(); } });
 }
 
 /* -------------------------------------------------------------------------
@@ -358,7 +364,7 @@ function updateCamera(dt, tAbs){
 }
 
 /* =========================================================================
-   CHAPTER 1 — Fixed second sphere spawning bug cleanly
+   CHAPTER 1 — Título (Fixed continuous loop)
    ========================================================================= */
 function makeChapter1(){
   let runners = [], ambient = [];
@@ -403,13 +409,12 @@ function makeChapter1(){
     runners.forEach(r => {
       const local = ((t + r.phase) % CYCLE) / CYCLE;
       if(local < ROLL_END){
-        // Fix: Force state reset on rolling phase entry
-        if(r.isCube || r.mesh.material.opacity < 1){
+        if(r.isCube){
           r.isCube = false;
           swapGeometry(r.mesh, 'sphere');
           r.mesh.scale.setScalar(1);
-          r.mesh.material.opacity = 1;
         }
+        r.mesh.material.opacity = 1;
         const p = local / ROLL_END;
         const x = THREE.MathUtils.lerp(START_X, TRIGGER_X, easeOutCubic(p));
         r.mesh.position.x = x;
@@ -442,7 +447,7 @@ function makeChapter1(){
 }
 
 /* =========================================================================
-   CHAPTER 2
+   CHAPTER 2 — Línea de graduación
    ========================================================================= */
 function makeChapter2(){
   let arc, spheres = [];
@@ -493,7 +498,7 @@ function makeChapter2(){
 }
 
 /* =========================================================================
-   CHAPTER 3
+   CHAPTER 3 — Transición
    ========================================================================= */
 function makeChapter3(){
   let floaters = [], net, stars;
@@ -583,7 +588,7 @@ function makeChapter3(){
 }
 
 /* =========================================================================
-   CHAPTER 4 — Added Force Field & Orbiting Particles around 3 main heroes
+   CHAPTER 4 — Academia + Industria + Ciudad (Force Field Physics)
    ========================================================================= */
 function makeChapter4(){
   let heroes = [], minions = [];
@@ -612,9 +617,16 @@ function makeChapter4(){
       const color = Math.random() < 0.5 ? PALETTE.orange : PALETTE.cyan;
       const mesh = makeMesh(shape, color);
       mesh.scale.setScalar(0.28 + Math.random() * 0.22);
-      mesh.position.set(rand(-8, 8), rand(-20, -2), rand(-4, 4));
+      const orbitR = rand(4.5, 8.5);
+      const orbitAngle = rand(0, TWO_PI);
+      mesh.position.set(Math.cos(orbitAngle) * orbitR, rand(-20, -2), Math.sin(orbitAngle) * orbitR);
       world.add(mesh);
-      minions.push({ mesh, speed: rand(0.8, 1.4) });
+      minions.push({
+        mesh,
+        orbitR,
+        angle: orbitAngle,
+        rotSpeed: rand(0.8, 1.6) * (Math.random() < 0.5 ? 1 : -1)
+      });
     }
   }
   function exit(){ heroes = []; minions = []; }
@@ -635,39 +647,28 @@ function makeChapter4(){
     });
     cx /= heroes.length; cy /= heroes.length; cz /= heroes.length;
 
-    // Orbiting + Attraction + Repulsion Forcefield
-    const REPEL_DIST = 3.2;
     minions.forEach(m => {
-      const repel = new THREE.Vector3();
+      m.angle += dt * m.rotSpeed;
+      
+      const targetX = cx + Math.cos(m.angle) * m.orbitR;
+      const targetZ = cz + Math.sin(m.angle) * m.orbitR;
+      const targetY = cy + Math.sin(t * 2 + m.angle) * 2;
+      
+      let pushVec = new THREE.Vector3();
       heroes.forEach(h => {
-        const dist = m.mesh.position.distanceTo(h.mesh.position);
-        if(dist < REPEL_DIST && dist > 0.001){
-          const pushDir = new THREE.Vector3().subVectors(m.mesh.position, h.mesh.position).normalize();
-          repel.addScaledVector(pushDir, (REPEL_DIST - dist) * 4.2);
+        const dVec = new THREE.Vector3().subVectors(m.mesh.position, h.mesh.position);
+        const dist = dVec.length();
+        if(dist < 3.8 && dist > 0.001){
+          const force = (3.8 - dist) / 3.8;
+          pushVec.add(dVec.normalize().multiplyScalar(force * 6.0));
         }
       });
 
-      const pullCenter = new THREE.Vector3(cx, cy, cz).sub(m.mesh.position);
-      pullCenter.y = (cy - m.mesh.position.y) * 0.4;
-
-      const relX = m.mesh.position.x - cx;
-      const relZ = m.mesh.position.z - cz;
-      const orbit = new THREE.Vector3(-relZ, 0, relX).normalize().multiplyScalar(3.5);
-
-      const vel = new THREE.Vector3()
-        .addScaledVector(pullCenter.normalize(), 1.5)
-        .add(orbit)
-        .add(repel);
-
-      m.mesh.position.addScaledVector(vel, dt * m.speed);
+      _tmpVecA.set(targetX, targetY, targetZ).add(pushVec).sub(m.mesh.position);
+      m.mesh.position.addScaledVector(_tmpVecA, dt * 2.8);
+      
       m.mesh.rotation.y += dt * 1.5;
       m.mesh.rotation.x += dt * 0.8;
-
-      if(m.mesh.position.y > cy + 14 || m.mesh.position.y < cy - 16){
-        const ang = rand(0, TWO_PI);
-        const r = rand(4, 7);
-        m.mesh.position.set(cx + Math.cos(ang) * r, cy - 14, cz + Math.sin(ang) * r);
-      }
     });
 
     setCamGoal(cx + 7.5, cy + 2, cz + 11, cx, cy, cz);
@@ -676,7 +677,7 @@ function makeChapter4(){
 }
 
 /* =========================================================================
-   CHAPTER 5
+   CHAPTER 5 — Red / mandala
    ========================================================================= */
 function makeChapter5(){
   let parts = [], net;
@@ -718,7 +719,7 @@ function makeChapter5(){
 }
 
 /* =========================================================================
-   CHAPTER 6
+   CHAPTER 6 — Comunidad
    ========================================================================= */
 function makeChapter6(){
   let streaks = [], stars;
@@ -760,11 +761,11 @@ function makeChapter6(){
 }
 
 /* =========================================================================
-   CHAPTER 7 — Extended travel distance for a longer, less jarring loop
+   CHAPTER 7 — Confianza (Extended Duration)
    ========================================================================= */
 function makeChapter7(){
   let runner, trail, obstacles = [], net, x = 0, connectionsMade = 0;
-  const BASE_SPEED = 2.0, SPEED_PER_CONNECTION = 0.8, RANGE = 140, THRESH = 6.5;
+  const BASE_SPEED = 1.6, SPEED_PER_CONNECTION = 0.9, RANGE = 140, THRESH = 7.5;
 
   function enter(){
     camSmooth = 0.035;
@@ -775,12 +776,12 @@ function makeChapter7(){
     world.add(trail.points); disposables.push(trail);
 
     obstacles = [];
-    for(let i = 0; i < 36; i++){
+    for(let i = 0; i < 32; i++){
       const shape = pick(['cube', 'octa', 'tetra', 'cylinder']);
       const color = pick([PALETTE.cyan, PALETTE.orange, PALETTE.pink]);
       const mesh = makeMesh(shape, color);
       mesh.scale.setScalar(0.52);
-      const ox = -RANGE / 2 + (i + 0.6) * (RANGE / 36);
+      const ox = -RANGE / 2 + (i + 0.6) * (RANGE / 32);
       mesh.position.set(ox, rand(-1.5, 1.5), rand(-2, 2));
       world.add(mesh);
       obstacles.push({ mesh, hit: false });
@@ -817,88 +818,105 @@ function makeChapter7(){
 }
 
 /* =========================================================================
-   CHAPTER 8 — Only Cube comes in first; delayed spawn with dynamic paths
+   CHAPTER 8 — Experiencia y nuevas rutas (Delayed Spheres Release)
    ========================================================================= */
 function makeChapter8(){
-  let core, glow = null, branches = [], released = false;
+  let core, glow = null, branches = [], morphed = false;
   const RISE_SPAN = 40;
 
   function enter(){
     camSmooth = 0.006; 
     core = makeMesh('cube', PALETTE.orange);
+    core.position.set(-14, 0, 0);
     world.add(core);
-    released = false; glow = null;
 
-    gsap.fromTo(core.position, { x: -14, y: 0, z: 0 }, { x: 0, y: 0, z: 0, duration: 1.0, ease: 'power2.out' });
-    gsap.fromTo(core.scale, { x: 1.4, y: 0.6, z: 1.4 }, { x: 1, y: 1, z: 1, duration: 1.0, ease: 'elastic.out(1,0.6)' });
+    gsap.to(core.position, { x: 0, y: 0, z: 0, duration: 1.4, ease: 'power2.out' });
+    gsap.fromTo(core.scale, { x: 1.4, y: 0.6, z: 1.4 }, { x: 1, y: 1, z: 1, duration: 1.4, ease: 'elastic.out(1,0.6)' });
 
+    glow = makeGlow(PALETTE.orange, 5);
+    glow.position.set(0, 0, 0);
+    world.add(glow);
+
+    morphed = false;
     branches = [];
+
     const colors = [PALETTE.cyan, PALETTE.pink, PALETTE.red, PALETTE.orange];
     for(let i = 0; i < 4; i++){
       const color = colors[i];
       const mesh = makeMesh('sphere', color);
       mesh.scale.setScalar(0); 
       world.add(mesh);
-      
+
       const trail = new TrailSystem(140, color, 85);
       world.add(trail.points); disposables.push(trail);
+      
       branches.push({
-        mesh, trail,
-        dirAngle: (i / 4) * TWO_PI,
-        radius: 2.2 + i * 0.4,
-        freqX: rand(1.2, 2.2),
-        freqZ: rand(1.5, 2.5),
-        phase: rand(0, TWO_PI)
+        mesh, trail, dirAngle: (i / 4) * TWO_PI + 0.4,
+        radius: 1.6 + i * 0.4, wobble: rand(0, TWO_PI), released: false
       });
     }
+
+    gsap.delayedCall(1.8, () => {
+      morphed = true;
+      branches.forEach((b, idx) => {
+        gsap.to(b.mesh.scale, {
+          x: 0.52, y: 0.52, z: 0.52,
+          duration: 1.2,
+          delay: idx * 0.2,
+          ease: 'back.out(1.8)',
+          onStart: () => { b.released = true; }
+        });
+      });
+    });
+
     setCamGoal(0, 1, 13.5, 0, 1, 0);
   }
+
   function exit(){ branches = []; }
 
   function update(dt, t){
-    core.rotation.y += dt * 0.4;
-    
-    if(t > 1.1 && !released){
-      released = true;
-      glow = makeGlow(PALETTE.orange, 5);
-      glow.position.copy(core.position);
-      world.add(glow);
-
-      branches.forEach((b, i) => {
-        gsap.to(b.mesh.scale, { x: 0.55, y: 0.55, z: 0.55, duration: 1.2, delay: i * 0.15, ease: 'back.out(2)' });
-      });
-    }
-
+    core.rotation.y += dt * 0.3;
     if(glow){
       glow.position.copy(core.position);
-      const pulse = 4.6 + Math.sin(t * 2.5) * 0.5;
+      const pulse = 4.6 + Math.sin(t * 2) * 0.5;
       glow.scale.set(pulse, pulse, 1);
     }
 
-    if(released){
+    if(morphed){
       let cx = 0, cy = 0, cz = 0;
-      const age = t - 1.1;
+      let activeCount = 0;
+      const age = t - 1.8;
+
       branches.forEach(b => {
+        if(!b.released) return;
+        activeCount++;
         const y = (age * 2.2) % RISE_SPAN;
-        const r = b.radius + Math.sin(age * b.freqX + b.phase) * 0.8;
-        b.mesh.position.x = Math.cos(b.dirAngle + age * 0.8) * r + Math.sin(age * 2.5) * 0.7;
-        b.mesh.position.z = Math.sin(b.dirAngle * 2 + age * 0.9) * r + Math.cos(age * 2.1) * 0.7;
+        const waveX = Math.sin(t * 2.2 + b.wobble) * 1.8;
+        const waveZ = Math.cos(t * 1.8 + b.wobble) * 1.5;
+
+        b.mesh.position.x = Math.cos(b.dirAngle) * b.radius + waveX;
+        b.mesh.position.z = Math.sin(b.dirAngle) * b.radius + waveZ;
         b.mesh.position.y = y;
-        b.mesh.rotation.x += dt * 2.5; b.mesh.rotation.y += dt * 1.8;
+
+        b.mesh.rotation.x += dt * 2;
+        b.mesh.rotation.y += dt * 1.5;
         b.trail.spawn(b.mesh.position);
         b.trail.decay(dt * 0.65);
+
         cx += b.mesh.position.x; cy += y; cz += b.mesh.position.z;
       });
-      cx /= branches.length; cy /= branches.length; cz /= branches.length;
-      const LOOKAHEAD = 3.2;
-      setCamGoal(cx + 3.2, cy + LOOKAHEAD, cz + 12.5, cx, cy + LOOKAHEAD * 0.6, cz);
+
+      if(activeCount > 0){
+        cx /= activeCount; cy /= activeCount; cz /= activeCount;
+        setCamGoal(cx + 3.2, cy + 3.2, cz + 12.5, cx, cy + 1.8, cz);
+      }
     }
   }
   return { enter, update, exit };
 }
 
 /* =========================================================================
-   CHAPTER 9
+   CHAPTER 9 — Torre infinita
    ========================================================================= */
 function makeChapter9(){
   let pieces = [], spawnAcc = 0, topY = 0, count = 0;
@@ -936,39 +954,50 @@ function makeChapter9(){
 }
 
 /* =========================================================================
-   CHAPTER 10 — Shifted right + added smooth spawn animation for spheres
+   CHAPTER 10 — Escalera (Shifted Right + Smooth Spawn)
    ========================================================================= */
 function makeChapter10(){
   let steps = [], rollers = [], spawnAcc = 0, stepIndex = 0;
   const CAP = 40, STEP_DX = 2.0, STEP_DY = 1.05, SPAWN_RATE = 0.45;
-  const X_OFFSET = 4.0; // Shift right to avoid overlap with text box
+  const OFFSET_X = 6.0;
 
   function enter(){
     camSmooth = 0.03;
     steps = []; rollers = []; spawnAcc = 0; stepIndex = 0;
+
     for(let s = 0; s < 3; s++){
       const mesh = makeMesh('sphere', PALETTE.red);
       cloneMaterialOf(mesh);
       mesh.material.transparent = true;
       mesh.material.opacity = 0;
       mesh.scale.setScalar(0.001);
+      mesh.position.set(OFFSET_X, 0, 0);
       world.add(mesh);
-      
-      gsap.to(mesh.scale, { x: 1, y: 1, z: 1, duration: 0.8, delay: 0.4 + s * 0.3, ease: 'back.out(2)' });
-      gsap.to(mesh.material, { opacity: 1, duration: 0.6, delay: 0.4 + s * 0.3 });
+
+      gsap.to(mesh.scale, { x: 1, y: 1, z: 1, duration: 0.8, delay: 0.4 + s * 0.4, ease: 'back.out(1.8)' });
+      gsap.to(mesh.material, { opacity: 1, duration: 0.6, delay: 0.4 + s * 0.4 });
 
       rollers.push({ mesh, progress: -s * 3.4, speed: 3.0 + s * 0.15, lastBumpIdx: -1 });
     }
-    setCamGoal(6 + X_OFFSET, 4, 21, X_OFFSET, 2, 0);
+    setCamGoal(OFFSET_X + 6, 4, 21, OFFSET_X, 2, 0);
   }
   function exit(){ steps = []; rollers = []; }
 
   function spawnStep(){
     const mesh = makeMesh('cube', PALETTE.cyan);
-    const x = stepIndex * STEP_DX + X_OFFSET, y = stepIndex * STEP_DY;
-    mesh.position.set(x, y - 6, 0);
+    cloneMaterialOf(mesh);
+    mesh.material.transparent = true;
+    mesh.material.opacity = 0;
+    mesh.scale.setScalar(0.001);
+
+    const x = OFFSET_X + stepIndex * STEP_DX;
+    const y = stepIndex * STEP_DY;
+    mesh.position.set(x, y, 0);
     world.add(mesh);
-    gsap.to(mesh.position, { y, duration: 0.7, ease: 'elastic.out(1,0.7)' });
+
+    gsap.to(mesh.scale, { x: 1, y: 1, z: 1, duration: 0.6, ease: 'back.out(1.7)' });
+    gsap.to(mesh.material, { opacity: 1, duration: 0.4 });
+
     steps.push({ mesh, x, y });
     stepIndex++;
     if(steps.length > CAP){ const old = steps.shift(); world.remove(old.mesh); }
@@ -985,7 +1014,7 @@ function makeChapter10(){
       const maxIdx = steps.length - 1;
       if(maxIdx < 1) return;
       if(r.progress < 0){
-        r.mesh.position.set(-3 + X_OFFSET + r.progress * 0.4, 1.2, 0);
+        r.mesh.position.set(OFFSET_X - 3 + r.progress * 0.4, 1.2, 0);
         return;
       }
       const idx = Math.min(Math.floor(r.progress), maxIdx - 1);
@@ -1001,18 +1030,12 @@ function makeChapter10(){
       r.mesh.rotation.z -= dt * 5;
       const hopNorm = Math.sin(localT * Math.PI);
       r.mesh.scale.set(1.12 - hopNorm * 0.22, 0.85 + hopNorm * 0.3, 1.12 - hopNorm * 0.22);
-
       if(idx !== r.lastBumpIdx && localT < 0.4){
         r.lastBumpIdx = idx;
         gsap.to(a.mesh.position, { y: a.y + 0.32, duration: 0.16, yoyo: true, repeat: 1, ease: 'power1.inOut' });
         flashConnection(r.mesh.position, a.mesh.position, PALETTE.pink);
       }
-
-      if(r.progress > maxIdx - 0.3){
-        r.progress = -rand(1.5, 3.5);
-        r.lastBumpIdx = -1;
-        gsap.fromTo(r.mesh.scale, { x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1, duration: 0.6, ease: 'back.out(2)' });
-      }
+      if(r.progress > maxIdx - 0.3){ r.progress = -rand(1.5, 3.5); r.lastBumpIdx = -1; }
     });
 
     if(lastStep) setCamGoal(lastStep.x - 2, lastStep.y + 3, 20, lastStep.x - 8, lastStep.y - 1, 0);
@@ -1021,7 +1044,7 @@ function makeChapter10(){
 }
 
 /* =========================================================================
-   CHAPTER 11
+   CHAPTER 11 — El presente
    ========================================================================= */
 function makeChapter11(){
   let cells = [];
@@ -1073,7 +1096,7 @@ function makeChapter11(){
 }
 
 /* =========================================================================
-   CHAPTER 12
+   CHAPTER 12 — El futuro se construye
    ========================================================================= */
 function makeChapter12(){
   let rings = [], net;
@@ -1136,7 +1159,7 @@ function makeChapter12(){
 }
 
 /* =========================================================================
-   CHAPTER 13
+   CHAPTER 13 — Cierre
    ========================================================================= */
 function makeChapter13(){
   let sphere, cube;
@@ -1163,114 +1186,120 @@ function makeChapter13(){
 }
 
 /* =========================================================================
-   Slide metadata with ES / PT-BR Translations & Local Image Paths
+   Slide metadata (Bilingual)
    ========================================================================= */
-let currentLang = 'es';
-
-const UI_TEXT = {
-  es: { hint: '← → · espacio · clic para navegar', qr1: 'Recuerdos del evento', qr2: 'Fórum UPB · Instagram' },
-  pt: { hint: '← → · espaço · clique para navegar', qr1: 'Lembranças do evento', qr2: 'Fórum UPB · Instagram' }
-};
-
 const SLIDE_META = [
-  {
+  { 
     headline: {
       es: 'RELEVO GENERACIONAL<br><span class="em">La ventaja que nadie está aprovechando.</span>',
-      pt: 'TRANSIÇÃO GERACIONAL<br><span class="em">A vantagem que ninguém está aproveitando.</span>'
+      pt: 'RENOVAÇÃO GERACIONAL<br><span class="em">A vantagem que ninguém está aproveitando.</span>'
     },
-    sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.red
+    sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.red 
   },
-  {
+  { 
     headline: {
       es: '¿Un gran auditorio<br>solo para hacer grados?',
       pt: 'Um grande auditório<br>apenas para formaturas?'
     },
     sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.orange,
-    photo: { file: 'graduacion.webp', label: 'Graduación — foto de referencia' }
+    photo: { file: 'assets/upb-graduacion-2026.webp', label: { es: 'Graduación — foto de referencia', pt: 'Formatura — foto de referência' } } 
   },
-  {
+  { 
     headline: {
       es: 'Los eventos no llegaron a la Universidad.<br><span class="em">La Universidad decidió encontrarse con el mundo.</span>',
       pt: 'Os eventos não chegaram à Universidade.<br><span class="em">A Universidade decidiu se encontrar com o mundo.</span>'
     },
-    sub: { es: '', pt: '' }, align: 'center', theme: 'dark', accent: PALETTE.cyan
+    sub: { es: '', pt: '' }, align: 'center', theme: 'dark', accent: PALETTE.cyan 
   },
-  {
+  { 
     headline: {
       es: 'Academia + Industria + Ciudad',
       pt: 'Academia + Indústria + Cidade'
     },
     sub: { es: '', pt: '' }, align: 'top', theme: 'dark', accent: PALETTE.cyan,
-    photo: { file: 'ciudad.webp', label: 'Academia · Industria · Ciudad' }
+    photo: { file: 'assets/upb-ciudad-2026.webp', label: { es: 'Academia · Industria · Ciudad', pt: 'Academia · Indústria · Cidade' } } 
   },
-  {
+  { 
     headline: {
       es: 'Los eventos nunca fueron el objetivo.<br><span class="em">El impacto sí.</span>',
-      pt: 'Os eventos nunca foram o objetivo.<br><span class="em">O impacto, sim.</span>'
+      pt: 'Os eventos nunca foram o objetivo.<br><span class="em">O impacto sim.</span>'
     },
     sub: { es: '', pt: '' }, align: 'top', theme: 'dark', accent: PALETTE.pink,
-    photo: { file: 'impacto.webp', label: 'Impacto — foto de referencia' }
+    photo: { file: 'assets/upb-impacto-2026.webp', label: { es: 'Impacto — foto de referencia', pt: 'Impacto — foto de referência' } } 
   },
-  {
+  { 
     headline: {
       es: 'Un evento trae personas.<br>Una <span class="em">comunidad</span> trae <span class="em">transformación</span>.',
-      pt: 'Um evento traz pessoas.<br>Uma <span class="em">comunidade</span> traz <span class="em">transformação</span>.'
+      pt: 'Um evento atrai pessoas.<br>Uma <span class="em">comunidade</span> traz <span class="em">transformação</span>.'
     },
-    sub: { es: '', pt: '' }, align: 'center', theme: 'dark', accent: PALETTE.pink
+    sub: { es: '', pt: '' }, align: 'center', theme: 'dark', accent: PALETTE.pink 
   },
-  {
+  { 
     headline: {
       es: 'El talento crece a la velocidad<br>de la <span class="em">confianza</span>.',
       pt: 'O talento cresce na velocidade<br>da <span class="em">confiança</span>.'
     },
-    sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.red
+    sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.red 
   },
-  {
+  { 
     headline: {
       es: 'La <span class="em">experiencia</span> construye el <span class="em">camino</span>.<br>Las nuevas generaciones descubren <span class="em">nuevas rutas</span>.',
       pt: 'A <span class="em">experiência</span> constrói o <span class="em">caminho</span>.<br>As novas gerações descobrem <span class="em">novas rotas</span>.'
     },
     sub: { es: '', pt: '' }, align: 'top', theme: 'dark', accent: PALETTE.orange,
-    photo: { file: 'experiencia.webp', label: 'Experiencia — foto de referencia' }
+    photo: { file: 'assets/upb-experiencia-2026.webp', label: { es: 'Experiencia — foto de referencia', pt: 'Experiência — foto de referência' } } 
   },
-  {
+  { 
     headline: {
       es: 'Una visión.<br><span class="em">Dos generaciones.</span>',
       pt: 'Uma visão.<br><span class="em">Duas gerações.</span>'
     },
-    sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.cyan
+    sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.cyan 
   },
-  {
+  { 
     headline: {
       es: 'El <span class="em">crecimiento</span> no ocurre cuando<br>una generación reemplaza a otra.<br>Ocurre cuando <span class="em">trabajan juntas</span>.',
       pt: 'O <span class="em">crescimento</span> não acontece quando<br>uma geração substitui outra.<br>Acontece quando <span class="em">trabalham juntas</span>.'
     },
-    sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.red
+    sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.red 
   },
-  {
+  { 
     headline: {
       es: 'Los jóvenes no son el futuro.<br>Son el <span class="em">presente</span> que muchas<br>organizaciones aún no ven.',
       pt: 'Os jovens não são o futuro.<br>São o <span class="em">presente</span> que muitas<br>organizações ainda não veem.'
     },
-    sub: { es: '', pt: '' }, align: 'center', theme: 'dark', accent: PALETTE.cyan
+    sub: { es: '', pt: '' }, align: 'center', theme: 'dark', accent: PALETTE.cyan 
   },
-  {
+  { 
     headline: {
       es: 'El <span class="em">futuro</span> no se hereda.<br><span class="em">Se construye.</span>',
       pt: 'O <span class="em">futuro</span> não se herda.<br><span class="em">Se constrói.</span>'
     },
     sub: { es: '', pt: '' }, align: 'top', theme: 'dark', accent: PALETTE.pink,
-    photo: { file: 'futuro.webp', label: 'El futuro — foto de referencia' }
+    photo: { file: 'assets/upb-futuro-2026.webp', label: { es: 'El futuro — foto de referencia', pt: 'O futuro — foto de referência' } } 
   },
-  {
+  { 
     headline: {
       es: 'Gracias.',
       pt: 'Obrigado.'
     },
     sub: { es: '', pt: '' }, align: 'top-center', theme: 'light', accent: PALETTE.red, qr: true,
-    photo: { file: 'cierre.webp', label: 'Fórum UPB 2026' }
+    photo: { file: 'assets/upb-cierre-2026.webp', label: { es: 'Fórum UPB 2026', pt: 'Fórum UPB 2026' } } 
   }
 ];
+
+const UI_TEXTS = {
+  es: {
+    qr1: 'Recuerdos del evento',
+    qr2: 'Fórum UPB · Instagram',
+    hint: '← → · espacio · clic para navegar'
+  },
+  pt: {
+    qr1: 'Lembranças do evento',
+    qr2: 'Fórum UPB · Instagram',
+    hint: '← → · espaço · clique para navegar'
+  }
+};
 
 const chapterFactories = [
   makeChapter1, makeChapter2, makeChapter3, makeChapter4, makeChapter5, makeChapter6,
@@ -1291,19 +1320,34 @@ const photoCaptionEl = document.getElementById('photo-caption');
 const qrRowEl = document.getElementById('qr-row');
 const chapterIndexEl = document.getElementById('chapter-index');
 const progressFillEl = document.getElementById('progress-fill');
+const langBtn = document.getElementById('lang-toggle');
+const qrLabel1 = document.getElementById('qr-label-1');
+const qrLabel2 = document.getElementById('qr-label-2');
+const navHint = document.getElementById('nav-hint');
 
 let current = -1;
 let clockStart = 0;
 const clock = new THREE.Clock();
 
-function updateSlideText(i){
-  if(i < 0 || i >= SLIDE_META.length) return;
-  const meta = SLIDE_META[i];
-  headlineEl.innerHTML = typeof meta.headline === 'object' ? meta.headline[currentLang] : meta.headline;
-  subtextEl.innerHTML = typeof meta.sub === 'object' ? meta.sub[currentLang] : (meta.sub || '');
-  document.getElementById('nav-hint').textContent = UI_TEXT[currentLang].hint;
-  document.getElementById('qr-text-1').textContent = UI_TEXT[currentLang].qr1;
+function updateText(){
+  if(current < 0) return;
+  const meta = SLIDE_META[current];
+  headlineEl.innerHTML = meta.headline[currentLang];
+  subtextEl.innerHTML = meta.sub[currentLang] || '';
+  
+  if(meta.photo){
+    photoCaptionEl.textContent = meta.photo.label[currentLang];
+  }
+  
+  qrLabel1.textContent = UI_TEXTS[currentLang].qr1;
+  qrLabel2.textContent = UI_TEXTS[currentLang].qr2;
+  navHint.textContent = UI_TEXTS[currentLang].hint;
 }
+
+langBtn.addEventListener('click', () => {
+  currentLang = currentLang === 'es' ? 'pt' : 'es';
+  updateText();
+});
 
 function goTo(i){
   if(i < 0 || i >= chapters.length || i === current) return;
@@ -1316,7 +1360,7 @@ function goTo(i){
   document.body.className = 'theme-' + meta.theme;
   stageEl.style.setProperty('--accent', meta.accent);
   
-  updateSlideText(i);
+  updateText();
   
   textLayerEl.dataset.align = meta.align;
   chapterIndexEl.textContent = String(i + 1).padStart(2, '0') + ' / ' + String(chapters.length).padStart(2, '0');
@@ -1324,8 +1368,7 @@ function goTo(i){
 
   if(meta.photo){
     photoFrameEl.classList.add('visible');
-    photoImgEl.style.backgroundImage = `url('./assets/${meta.photo.file}')`;
-    photoCaptionEl.textContent = meta.photo.label;
+    photoImgEl.style.backgroundImage = `url('${meta.photo.file}')`;
   } else {
     photoFrameEl.classList.remove('visible');
   }
@@ -1335,16 +1378,6 @@ function goTo(i){
   clockStart = clock.getElapsedTime();
   chapters[i].enter(prev);
 }
-
-// Language switch handlers
-document.querySelectorAll('#lang-toggle button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#lang-toggle button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    currentLang = btn.dataset.lang;
-    updateSlideText(current);
-  });
-});
 
 window.addEventListener('keydown', (e) => {
   if(e.key === 'ArrowRight' || e.key === ' '){ e.preventDefault(); goTo(current + 1); }
@@ -1357,6 +1390,9 @@ window.addEventListener('keydown', (e) => {
 document.getElementById('tap-left').addEventListener('click', () => goTo(current - 1));
 document.getElementById('tap-right').addEventListener('click', () => goTo(current + 1));
 
+/* -------------------------------------------------------------------------
+   Stage fit
+   ------------------------------------------------------------------------- */
 function fitStage(){
   const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
   const ox = (window.innerWidth - 1920 * scale) / 2;
@@ -1371,6 +1407,9 @@ window.addEventListener('resize', () => {
 });
 fitStage();
 
+/* -------------------------------------------------------------------------
+   Main loop
+   ------------------------------------------------------------------------- */
 function animate(){
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
