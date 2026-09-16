@@ -39,9 +39,13 @@
       </div>
 
       <figure class="photo-frame" id="photo-frame">
-        <!-- New wrapper for the idle animation -->
-        <div class="photo-idle-wrapper">
-          <div class="photo-frame__img" id="photo-img"></div>
+        <!-- idle-wrapper: parallax + float, driven by the render loop -->
+        <div class="photo-idle-wrapper" id="photo-idle">
+          <!-- anim-wrapper: owned by GSAP for enter/exit -->
+          <div class="photo-anim" id="photo-anim">
+            <div class="photo-glow" id="photo-glow"></div>
+            <div class="photo-frame__img" id="photo-img"></div>
+          </div>
         </div>
       </figure>
 

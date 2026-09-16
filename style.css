@@ -106,7 +106,7 @@ body.theme-light{ --fg: var(--ink); --bg: var(--cream); --panel-rgb: 255,251,242
 }
 
 .logo-year {
-  height: 64px;
+  height: 108px;
 }
 
 .top-controls {
@@ -148,6 +148,7 @@ body.theme-light{ --fg: var(--ink); --bg: var(--cream); --panel-rgb: 255,251,242
 
 .text-layer{
   position:absolute;
+  z-index:15;
   max-width:1180px;
   padding:36px 48px;
   border-radius:22px;
@@ -205,46 +206,170 @@ body.theme-light{ --fg: var(--ink); --bg: var(--cream); --panel-rgb: 255,251,242
   font-weight:inherit;
 }
 
-/* 3D Perspective Photo Frame */
+/* =========================================================================
+   PHOTO SYSTEM — pose presets + depth
+   The frame is a 3-layer rig:
+     .photo-frame        -> pose: where it sits on stage, how big, perspective
+     .photo-idle-wrapper -> parallax + float, written from the render loop
+     .photo-anim         -> owned by GSAP for enter / exit
+     .photo-frame__img   -> the static 3D pose rotation
+   ========================================================================= */
 .photo-frame{
   position:absolute;
-  bottom:110px; right:96px;
-  width:440px;
-  perspective:1200px;
-  opacity:0; transform:translateY(24px) scale(0.95);
-  transition:opacity 1s cubic-bezier(.4,0,.2,1), transform 1s cubic-bezier(.4,0,.2,1);
+  perspective:1400px;
+  opacity:0;
   pointer-events:auto;
   z-index:12;
+  /* pose defaults, overridden per pose class */
+  --ry:-14deg; --rx:7deg; --rz:-1.5deg;
+  --img-op:0.9;
+  --radius:14px;
+  --ratio:4 / 5;
+  --par-depth:1;
+  --mask:none;
+  --glow-op:0.55;
 }
-.photo-frame.visible{ opacity:1; transform:translateY(0) scale(1); }
+.photo-frame.visible{ opacity:1; }
+
+.photo-idle-wrapper{
+  width:100%; height:100%;
+  transform-style:preserve-3d;
+  /* written by main.js each frame */
+  transform:translate3d(
+    calc(var(--par-x, 0px) * var(--par-depth, 1)),
+    calc(var(--float-y, 0px) * var(--par-depth, 1) + var(--par-y, 0px) * var(--par-depth, 1)),
+    0);
+}
+
+.photo-anim{
+  width:100%; height:100%;
+  transform-style:preserve-3d;
+  position:relative;
+  will-change:transform, opacity, filter;
+}
+
+.photo-glow{
+  position:absolute;
+  inset:-14% -10%;
+  border-radius:50%;
+  background:radial-gradient(ellipse at center, var(--accent, #ff2b39) 0%, rgba(0,0,0,0) 70%);
+  opacity:var(--glow-op);
+  filter:blur(46px);
+  transform:translateZ(-60px) scale(0.92);
+  pointer-events:none;
+  transition:opacity 1.2s ease, background 1.2s ease;
+}
 
 .photo-frame__img{
   width:100%;
-  aspect-ratio: 4 / 5;
-  border-radius:12px;
+  aspect-ratio: var(--ratio);
+  border-radius:var(--radius);
   background-size:cover;
   background-position:center;
   position:relative;
   overflow:hidden;
-  opacity:0.88;
-  transform: rotateY(-14deg) rotateX(7deg) rotateZ(-1.5deg) translateZ(0);
-  transform-style: preserve-3d;
-  box-shadow: -20px 25px 50px rgba(0,0,0,0.4), 0 0 20px rgba(255,255,255,0.05);
-  transition: transform 0.8s ease, opacity 0.8s ease, box-shadow 0.8s ease;
-  backdrop-filter: blur(2px);
+  opacity:var(--img-op);
+  transform: rotateY(var(--ry)) rotateX(var(--rx)) rotateZ(var(--rz)) translateZ(0);
+  transform-style:preserve-3d;
+  box-shadow: -20px 28px 60px rgba(0,0,0,0.42), 0 0 24px rgba(255,255,255,0.05);
+  transition: transform 0.9s cubic-bezier(.4,0,.2,1), opacity 0.8s ease, box-shadow 0.8s ease;
+  -webkit-mask-image: var(--mask);
+  mask-image: var(--mask);
 }
 
 .photo-frame__img:hover{
-  transform: rotateY(-6deg) rotateX(3deg) scale(1.02);
-  opacity:0.96;
+  transform: rotateY(calc(var(--ry) * 0.4)) rotateX(calc(var(--rx) * 0.4)) rotateZ(0deg) scale(1.02);
+  opacity:1;
 }
 
+/* accent tint — pulls the photo into the slide's palette */
+.photo-frame__img::before{
+  content:"";
+  position:absolute; inset:0;
+  background:var(--accent, #ff2b39);
+  mix-blend-mode:soft-light;
+  opacity:0.24;
+  pointer-events:none;
+}
+/* directional light, matches the 3D key light coming from upper left */
 .photo-frame__img::after{
   content:"";
   position:absolute; inset:0;
-  background:linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(15,11,1,0.3) 100%);
+  background:linear-gradient(135deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 42%, rgba(15,11,1,0.38) 100%);
   pointer-events:none;
 }
+
+/* ---- POSE: right-portrait — the classic, upright at bottom right ---- */
+.photo-frame.pose-right-portrait{
+  bottom:110px; right:96px; width:440px;
+  --ry:-14deg; --rx:7deg; --rz:-1.5deg;
+  --ratio:4 / 5; --par-depth:1;
+}
+
+/* ---- POSE: bleed-right — large, running off the right edge ---- */
+.photo-frame.pose-bleed-right{
+  top:50%; right:-110px; width:660px;
+  transform:translateY(-50%);
+  --ry:-24deg; --rx:4deg; --rz:2deg;
+  --ratio:3 / 4; --img-op:0.92; --radius:18px;
+  --par-depth:0.55;
+}
+
+/* ---- POSE: left-low — smaller, tilted the other way, low left ---- */
+.photo-frame.pose-left-low{
+  bottom:150px; left:72px; width:360px;
+  --ry:16deg; --rx:6deg; --rz:2.5deg;
+  --ratio:3 / 4; --img-op:0.86;
+  --par-depth:1.35;
+}
+
+/* ---- POSE: float-right — square, floating mid-right, tilted back ---- */
+.photo-frame.pose-float-right{
+  top:46%; right:150px; width:520px;
+  transform:translateY(-50%);
+  --ry:-11deg; --rx:-7deg; --rz:1.5deg;
+  --ratio:1 / 1; --img-op:0.9; --radius:20px;
+  --par-depth:0.85;
+}
+
+/* ---- POSE: band — cinematic strip across the bottom, dissolving at both ends ---- */
+.photo-frame.pose-band{
+  left:0; right:0; bottom:0; width:100%;
+  perspective:1800px;
+  --ry:0deg; --rx:12deg; --rz:0deg;
+  --ratio:1920 / 460; --img-op:0.72; --radius:0px;
+  --glow-op:0.3;
+  --par-depth:0.4;
+  --mask:linear-gradient(90deg, transparent 0%, #000 18%, #000 82%, transparent 100%),
+         linear-gradient(0deg, transparent 0%, #000 55%);
+}
+.photo-frame.pose-band .photo-frame__img{
+  -webkit-mask-composite:source-in;
+  mask-composite:intersect;
+  box-shadow:none;
+}
+
+/* ---- POSE: ambient — full bleed, sits behind the text as environment ---- */
+.photo-frame.pose-ambient{
+  inset:0; width:100%;
+  z-index:2;
+  perspective:2400px;
+  --ry:0deg; --rx:0deg; --rz:0deg;
+  --ratio:16 / 9; --img-op:0.34; --radius:0px;
+  --glow-op:0;
+  --par-depth:0.25;
+  --mask:radial-gradient(ellipse 78% 74% at 62% 48%, #000 28%, transparent 76%);
+}
+.photo-frame.pose-ambient .photo-frame__img{
+  height:100%;
+  box-shadow:none;
+  transform:scale(1.08);
+}
+.photo-frame.pose-ambient .photo-frame__img:hover{ transform:scale(1.08); opacity:var(--img-op); }
+.photo-frame.pose-ambient .photo-frame__img::before{ opacity:0.5; }
+body.theme-dark .photo-frame.pose-ambient .photo-frame__img{ mix-blend-mode:screen; }
+body.theme-light .photo-frame.pose-ambient .photo-frame__img{ mix-blend-mode:multiply; }
+
 .photo-frame figcaption{
   margin-top:14px;
   font-size:14px;
@@ -255,6 +380,7 @@ body.theme-light{ --fg: var(--ink); --bg: var(--cream); --panel-rgb: 255,251,242
 
 .qr-row{
   position:absolute;
+  z-index:15;
   bottom:120px; left:64px;
   display:flex; gap:28px;
   opacity:0; transform:translateY(16px);
@@ -324,15 +450,24 @@ body.theme-light{ --fg: var(--ink); --bg: var(--cream); --panel-rgb: 255,251,242
 .tap-zone--left{ left:0; }
 .tap-zone--right{ right:0; }
 
-/* Idle animation for the photos */
-@keyframes idleFloat {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-12px); }
+/* -------------------------------------------------------------------------
+   Presenter mode — "H" hides chrome, leaves only progress bar + imagery
+   ------------------------------------------------------------------------- */
+.chapter-index, .hint{
+  transition:opacity .45s ease, transform .45s ease;
+}
+.lang-btn{
+  transition:background .3s ease, color .3s ease, border-color .3s ease,
+             opacity .45s ease, transform .45s ease;
+}
+body.ui-hidden .chapter-index,
+body.ui-hidden .hint,
+body.ui-hidden .lang-btn{
+  opacity:0 !important;
+  transform:translateY(-6px);
+  pointer-events:none;
 }
 
-.photo-idle-wrapper {
-  animation: idleFloat 5s ease-in-out infinite;
-  transform-style: preserve-3d;
-  width: 100%;
-  height: 100%;
+@media (prefers-reduced-motion: reduce){
+  .photo-anim, .photo-idle-wrapper{ animation:none !important; }
 }

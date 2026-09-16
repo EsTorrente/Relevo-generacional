@@ -402,6 +402,7 @@ function setCamGoal(px, py, pz, lx, ly, lz){
   camGoal.pos.set(px, py, pz);
   camGoal.look.set(lx, ly, lz);
 }
+let camIdleX = 0, camIdleY = 0;   // read by the photo parallax
 function updateCamera(dt, tAbs){
   const k = 1 - Math.pow(camSmooth, dt);
   camCur.pos.lerp(camGoal.pos, k);
@@ -411,6 +412,7 @@ function updateCamera(dt, tAbs){
   const idleY = Math.cos(tAbs * 0.18) * 0.35;
   const idleZ = Math.sin(tAbs * 0.12) * 0.25;
   
+  camIdleX = idleX; camIdleY = idleY;
   camera.position.set(camCur.pos.x + idleX, camCur.pos.y + idleY, camCur.pos.z + idleZ);
   
   const lookIdleX = Math.cos(tAbs * 0.15) * 0.15;
@@ -1313,7 +1315,7 @@ const SLIDE_META = [
       pt: 'Um grande auditório<br>apenas para formaturas?'
     },
     sub: { es: '', pt: '' }, align: 'top', theme: 'light', accent: PALETTE.orange,
-    photo: { file: 'assets/upb-graduacion-2026.webp', label: { es: 'Graduación — foto de referencia', pt: 'Formatura — foto de referência' } } 
+    photo: { pose: 'pose-right-portrait', file: 'assets/upb-graduacion-2026.webp', label: { es: 'Graduación — foto de referencia', pt: 'Formatura — foto de referência' } } 
   },
   { 
     headline: {
@@ -1328,7 +1330,7 @@ const SLIDE_META = [
       pt: 'Academia + Indústria + Cidade'
     },
     sub: { es: '', pt: '' }, align: 'top', theme: 'dark', accent: PALETTE.cyan,
-    photo: { file: 'assets/upb-ciudad-2026.webp', label: { es: 'Academia · Industria · Ciudad', pt: 'Academia · Indústria · Cidade' } } 
+    photo: { pose: 'pose-bleed-right', file: 'assets/upb-ciudad-2026.webp', label: { es: 'Academia · Industria · Ciudad', pt: 'Academia · Indústria · Cidade' } } 
   },
   { 
     headline: {
@@ -1336,7 +1338,7 @@ const SLIDE_META = [
       pt: 'Os eventos nunca foram o objetivo.<br><span class="em">O impacto sim.</span>'
     },
     sub: { es: '', pt: '' }, align: 'top', theme: 'dark', accent: PALETTE.pink,
-    photo: { file: 'assets/upb-impacto-2026.webp', label: { es: 'Impacto — foto de referencia', pt: 'Impacto — foto de referência' } } 
+    photo: { pose: 'pose-left-low', file: 'assets/upb-impacto-2026.webp', label: { es: 'Impacto — foto de referencia', pt: 'Impacto — foto de referência' } } 
   },
   { 
     headline: {
@@ -1358,7 +1360,7 @@ const SLIDE_META = [
       pt: 'A <span class="em">experiência</span> constrói o <span class="em">caminho</span>.<br>As novas gerações descobrem <span class="em">novas rotas</span>.'
     },
     sub: { es: '', pt: '' }, align: 'top', theme: 'dark', accent: PALETTE.orange,
-    photo: { file: 'assets/upb-experiencia-2026.webp', label: { es: 'Experiencia — foto de referencia', pt: 'Experiência — foto de referência' } } 
+    photo: { pose: 'pose-ambient', file: 'assets/upb-experiencia-2026.webp', label: { es: 'Experiencia — foto de referencia', pt: 'Experiência — foto de referência' } } 
   },
   { 
     headline: {
@@ -1387,7 +1389,7 @@ const SLIDE_META = [
       pt: 'O <span class="em">futuro</span> não se herda.<br><span class="em">Se constrói.</span>'
     },
     sub: { es: '', pt: '' }, align: 'top', theme: 'dark', accent: PALETTE.pink,
-    photo: { file: 'assets/upb-futuro-2026.webp', label: { es: 'El futuro — foto de referencia', pt: 'O futuro — foto de referência' } } 
+    photo: { pose: 'pose-band', file: 'assets/upb-futuro-2026.webp', label: { es: 'El futuro — foto de referencia', pt: 'O futuro — foto de referência' } } 
   },
   { 
     headline: {
@@ -1395,7 +1397,7 @@ const SLIDE_META = [
       pt: 'Obrigado.'
     },
     sub: { es: '', pt: '' }, align: 'top-center', theme: 'dark', accent: PALETTE.red, qr: true,
-    photo: { file: 'assets/upb-cierre-2026.webp', label: { es: 'Fórum UPB 2026', pt: 'Fórum UPB 2026' } } 
+    photo: { pose: 'pose-float-right', file: 'assets/upb-cierre-2026.webp', label: { es: 'Fórum UPB 2026', pt: 'Fórum UPB 2026' } } 
   }
 ];
 
@@ -1403,12 +1405,12 @@ const UI_TEXTS = {
   es: {
     qr1: 'Recuerdos del evento',
     qr2: 'Fórum UPB · Instagram',
-    hint: '← → · espacio · clic para navegar'
+    hint: '← → · espacio · clic para navegar · H oculta la interfaz'
   },
   pt: {
     qr1: 'Lembranças do evento',
     qr2: 'Fórum UPB · Instagram',
-    hint: '← → · espaço · clique para navegar'
+    hint: '← → · espaço · clique para navegar · H oculta a interface'
   }
 };
 
@@ -1427,6 +1429,8 @@ const subtextEl = document.getElementById('subtext');
 const textLayerEl = document.getElementById('text-layer');
 const photoFrameEl = document.getElementById('photo-frame');
 const photoImgEl = document.getElementById('photo-img');
+const photoIdleEl = document.getElementById('photo-idle');
+const photoAnimEl = document.getElementById('photo-anim');
 const photoCaptionEl = document.getElementById('photo-caption');
 const qrRowEl = document.getElementById('qr-row');
 const chapterIndexEl = document.getElementById('chapter-index');
@@ -1463,6 +1467,117 @@ if(langBtn) {
   });
 }
 
+
+/* -------------------------------------------------------------------------
+   Photo choreography
+   Each photo gets a pose (see style.css) and an entrance built for that pose,
+   so the imagery never lands the same way twice.
+   ------------------------------------------------------------------------- */
+const PHOTO_POSES = [
+  'pose-right-portrait', 'pose-bleed-right', 'pose-left-low',
+  'pose-float-right', 'pose-band', 'pose-ambient'
+];
+
+function photoEnterConfig(pose){
+  switch(pose){
+    case 'pose-bleed-right':   // slides in from off-stage right, wipes open sideways
+      return { from:{ xPercent:16, yPercent:0, scale:0.95, rotation:2.5, filter:'blur(18px)' },
+               clip:['inset(0% 0% 0% 100%)', 'inset(0% 0% 0% 0%)'], dur:1.5, exit:{ xPercent:8, scale:1.02 } };
+    case 'pose-left-low':      // rises from below, counter-tilted
+      return { from:{ xPercent:-12, yPercent:16, scale:0.86, rotation:-5, filter:'blur(14px)' },
+               clip:['inset(100% 0% 0% 0%)', 'inset(0% 0% 0% 0%)'], dur:1.25, exit:{ xPercent:-8, yPercent:10 } };
+    case 'pose-float-right':   // irises open from the centre
+      return { from:{ xPercent:4, yPercent:-12, scale:0.8, rotation:3, filter:'blur(16px)' },
+               clip:['inset(18% 18% 18% 18%)', 'inset(0% 0% 0% 0%)'], dur:1.4, exit:{ yPercent:-12, scale:1.06 } };
+    case 'pose-band':          // cinematic strip unfurling from the centre outward
+      return { from:{ xPercent:0, yPercent:28, scale:1.03, rotation:0, filter:'blur(12px)' },
+               clip:['inset(0% 42% 0% 42%)', 'inset(0% 0% 0% 0%)'], dur:1.7, exit:{ yPercent:18, scale:1.0 } };
+    case 'pose-ambient':       // breathes in as environment, never as an object
+      return { from:{ xPercent:0, yPercent:0, scale:1.07, rotation:0, filter:'blur(30px)' },
+               clip:['inset(0% 0% 0% 0%)', 'inset(0% 0% 0% 0%)'], dur:2.1, exit:{ scale:1.04 } };
+    default:                   // right-portrait: lifts and unrolls upward
+      return { from:{ xPercent:6, yPercent:18, scale:0.87, rotation:4, filter:'blur(14px)' },
+               clip:['inset(0% 0% 100% 0%)', 'inset(0% 0% 0% 0%)'], dur:1.3, exit:{ yPercent:-8, scale:1.05 } };
+  }
+}
+
+let photoCurrentFile = null;
+let photoCurrentPose = null;
+let photoTl = null;
+
+function updatePhoto(meta){
+  if(!photoFrameEl || !photoAnimEl) return;
+  const next = meta.photo || null;
+  const nextFile = next ? next.file : null;
+  if(nextFile === photoCurrentFile) return;
+
+  const leaving = photoCurrentPose ? photoEnterConfig(photoCurrentPose) : null;
+  const hadPhoto = !!photoCurrentFile;
+  photoCurrentFile = nextFile;
+  photoCurrentPose = next ? (next.pose || 'pose-right-portrait') : null;
+
+  if(photoTl) photoTl.kill();
+  photoTl = gsap.timeline();
+
+  if(hadPhoto){
+    photoTl.to(photoAnimEl, Object.assign(
+      { opacity:0, filter:'blur(14px)', duration:0.55, ease:'power2.in' },
+      (leaving && leaving.exit) || {}
+    ));
+  }
+
+  if(!next){
+    photoTl.add(() => {
+      photoFrameEl.classList.remove('visible');
+      gsap.set(photoAnimEl, { clearProps:'all' });
+    });
+    return;
+  }
+
+  const pose = photoCurrentPose;
+  const cfg = photoEnterConfig(pose);
+
+  photoTl.add(() => {
+    PHOTO_POSES.forEach(p => photoFrameEl.classList.remove(p));
+    photoFrameEl.classList.add(pose);
+    if(photoImgEl) photoImgEl.style.backgroundImage = `url('${next.file}')`;
+    photoFrameEl.classList.add('visible');
+  });
+
+  photoTl.fromTo(photoAnimEl,
+    Object.assign({ opacity:0 }, cfg.from),
+    { opacity:1, xPercent:0, yPercent:0, scale:1, rotation:0, filter:'blur(0px)',
+      duration:cfg.dur, ease:'expo.out' });
+
+  if(photoImgEl){
+    photoTl.fromTo(photoImgEl,
+      { clipPath:cfg.clip[0], webkitClipPath:cfg.clip[0] },
+      { clipPath:cfg.clip[1], webkitClipPath:cfg.clip[1], duration:cfg.dur * 0.85, ease:'power3.out' },
+      '<');
+  }
+}
+
+/* Photo drifts with the same idle motion as the 3D camera, plus pointer parallax,
+   so it reads as an object inside the scene rather than a card pasted on top. */
+const pointer = { x:0, y:0, tx:0, ty:0 };
+window.addEventListener('pointermove', (e) => {
+  pointer.tx = (e.clientX / window.innerWidth - 0.5) * 2;
+  pointer.ty = (e.clientY / window.innerHeight - 0.5) * 2;
+});
+
+function updatePhotoMotion(tAbs, dt){
+  if(!photoIdleEl) return;
+  const k = Math.min(1, dt * 3);
+  pointer.x += (pointer.tx - pointer.x) * k;
+  pointer.y += (pointer.ty - pointer.y) * k;
+  const floatY = Math.sin(tAbs * 0.62) * 9 + Math.sin(tAbs * 0.27 + 1.3) * 5;
+  const parX = (-camIdleX * 26) + (pointer.x * -20);
+  const parY = (-camIdleY * 26) + (pointer.y * -13);
+  photoIdleEl.style.setProperty('--float-y', floatY.toFixed(2) + 'px');
+  photoIdleEl.style.setProperty('--par-x', parX.toFixed(2) + 'px');
+  photoIdleEl.style.setProperty('--par-y', parY.toFixed(2) + 'px');
+}
+
 function goTo(i){
   if(i < 0 || i >= chapters.length || i === current) return;
   const prev = current;
@@ -1471,7 +1586,8 @@ function goTo(i){
   current = i;
 
   const meta = SLIDE_META[i];
-  document.body.className = 'theme-' + meta.theme;
+  document.body.classList.remove('theme-light', 'theme-dark');
+  document.body.classList.add('theme-' + meta.theme);
   if(stageEl) stageEl.style.setProperty('--accent', meta.accent);
   
   updateText();
@@ -1490,12 +1606,7 @@ function goTo(i){
   if(chapterIndexEl) chapterIndexEl.textContent = String(i + 1).padStart(2, '0') + ' / ' + String(chapters.length).padStart(2, '0');
   if(progressFillEl) progressFillEl.style.width = ((i + 1) / chapters.length * 100) + '%';
 
-  if(meta.photo){
-    if(photoFrameEl) photoFrameEl.classList.add('visible');
-    if(photoImgEl) photoImgEl.style.backgroundImage = `url('${meta.photo.file}')`;
-  } else {
-    if(photoFrameEl) photoFrameEl.classList.remove('visible');
-  }
+  updatePhoto(meta);
   if(qrRowEl) qrRowEl.classList.toggle('visible', !!meta.qr);
 
   setBgGoal(meta.theme === 'dark' ? PALETTE.ink : PALETTE.cream);
@@ -1506,6 +1617,10 @@ function goTo(i){
 window.addEventListener('keydown', (e) => {
   if(e.key === 'ArrowRight' || e.key === ' '){ e.preventDefault(); goTo(current + 1); }
   else if(e.key === 'ArrowLeft'){ e.preventDefault(); goTo(current - 1); }
+  else if(e.key === 'h' || e.key === 'H'){
+    e.preventDefault();
+    document.body.classList.toggle('ui-hidden');
+  }
   else if(e.key === 'f' || e.key === 'F'){
     if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
     else document.exitFullscreen().catch(() => {});
@@ -1543,6 +1658,7 @@ function animate(){
     chapters[current].update(dt, t);
   }
   updateCamera(dt, clock.getElapsedTime());
+  updatePhotoMotion(clock.getElapsedTime(), dt);
   bgColor.lerp(bgGoal, 1 - Math.pow(0.01, dt));
   renderer.render(scene, camera);
 }
